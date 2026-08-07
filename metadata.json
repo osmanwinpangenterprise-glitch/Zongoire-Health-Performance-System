@@ -1,0 +1,6 @@
+{
+  "name": "Zongoire Health Performance System",
+  "description": "Health Performance Monitoring and Decision Support System for Zongoire Sub-District, Ghana Health Service",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
