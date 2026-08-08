@@ -23,6 +23,7 @@ interface Dhims2ImporterProps {
   userRole: UserRole;
   onRestoreBaselineData: () => void;
   onClearAllData: () => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const Dhims2Importer: React.FC<Dhims2ImporterProps> = ({
@@ -31,6 +32,7 @@ export const Dhims2Importer: React.FC<Dhims2ImporterProps> = ({
   userRole,
   onRestoreBaselineData,
   onClearAllData,
+  onNavigateTab,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -232,11 +234,50 @@ export const Dhims2Importer: React.FC<Dhims2ImporterProps> = ({
         </div>
       )}
 
-      {/* Success Notification */}
+      {/* Success Notification with Review Action Buttons */}
       {uploadSuccessMsg && (
-        <div className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 p-4 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 flex items-center space-x-3 shadow-sm">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          <span>{uploadSuccessMsg}</span>
+        <div className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 p-4 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 space-y-3 shadow-sm">
+          <div className="flex items-start space-x-3">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-1">
+              <p className="font-bold text-sm text-emerald-900 dark:text-emerald-100">
+                File(s) Reviewed & Import Confirmed!
+              </p>
+              <p>{uploadSuccessMsg}</p>
+            </div>
+          </div>
+
+          {onNavigateTab && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-200 dark:border-emerald-800/60">
+              <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mr-1">
+                Review Data Now:
+              </span>
+              <button
+                id="review-dashboard-btn"
+                type="button"
+                onClick={() => onNavigateTab('dashboard')}
+                className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-xs transition-colors cursor-pointer flex items-center space-x-1"
+              >
+                <span>Review Executive Dashboard →</span>
+              </button>
+              <button
+                id="review-league-btn"
+                type="button"
+                onClick={() => onNavigateTab('comparison')}
+                className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+              >
+                <span>View Facility Performance League</span>
+              </button>
+              <button
+                id="review-epi-btn"
+                type="button"
+                onClick={() => onNavigateTab('epi')}
+                className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+              >
+                <span>Review EPI Coverage</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -42,6 +42,8 @@ export function calculateFacilityMetrics(
       acc.skilledDeliveries += curr.maternalHealth.skilledDeliveries;
       acc.pnc += curr.maternalHealth.postnatalCare;
       acc.ipt3 += curr.maternalHealth.ipt3;
+      acc.teenagePregnancies += curr.maternalHealth.teenagePregnancies || 0;
+      acc.ancAnaemiaRegistration += curr.maternalHealth.ancAnaemiaRegistration || 0;
 
       // Child Health & Disease
       acc.growthMonitoring += curr.childHealth.growthMonitoringAttended;
@@ -70,6 +72,8 @@ export function calculateFacilityMetrics(
       skilledDeliveries: 0,
       pnc: 0,
       ipt3: 0,
+      teenagePregnancies: 0,
+      ancAnaemiaRegistration: 0,
       growthMonitoring: 0,
       malaria: 0,
       diarrhoea: 0,
@@ -112,6 +116,8 @@ export function calculateFacilityMetrics(
   const skilledDeliveryRate = Math.min(120, Number(((aggregated.skilledDeliveries / (periodDeliveriesTarget || 1)) * 100).toFixed(1)));
   const pncCoverageRate = Math.min(120, Number(((aggregated.pnc / (periodDeliveriesTarget || 1)) * 100).toFixed(1)));
   const ipt3CoverageRate = Math.min(120, Number(((aggregated.ipt3 / (periodPregnanciesTarget || 1)) * 100).toFixed(1)));
+  const teenagePregnancyRate = aggregated.anc1 > 0 ? Number(((aggregated.teenagePregnancies / aggregated.anc1) * 100).toFixed(1)) : 0;
+  const ancAnaemiaRegistrationRate = aggregated.anc1 > 0 ? Number(((aggregated.ancAnaemiaRegistration / aggregated.anc1) * 100).toFixed(1)) : 0;
 
   // Child Health
   const growthMonitoringRate = Math.min(
@@ -180,6 +186,8 @@ export function calculateFacilityMetrics(
     skilledDeliveryRate,
     pncCoverageRate,
     ipt3CoverageRate,
+    teenagePregnancyRate,
+    ancAnaemiaRegistrationRate,
     growthMonitoringRate,
     epiScore,
     maternalScore,

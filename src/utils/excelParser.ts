@@ -279,15 +279,127 @@ export async function parseUploadedExcel(file: File): Promise<{
 
         rawJson.forEach((row, idx) => {
           const rowNum = idx + 2; // 1-indexed header is row 1
-          const facilityId = (row['Facility ID'] || '').toString().trim().toLowerCase();
-          const facilityName = row['Facility Name'] || 'Unknown Facility';
-          const year = parseInt(row['Year']) || new Date().getFullYear();
-          const month = parseInt(row['Month Number (1-12)']) || 1;
 
-          if (!facilityId) {
-            errors.push(`Row ${rowNum}: Missing Facility ID.`);
-            return;
+          // Skip completely empty rows
+          const keys = Object.keys(row);
+          if (keys.length === 0) return;
+          const hasAnyValue = keys.some(
+            (k) => row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== ''
+          );
+          if (!hasAnyValue) return;
+
+          // Helper to get normalized key mapping for row
+          const normalizedMap = new Map<string, any>();
+          keys.forEach((k) => {
+            const cleanKey = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+            normalizedMap.set(cleanKey, row[k]);
+          });
+
+          // Helper to extract string value by searching normalized keys or substring matches
+          const getStrFuzzy = (targetPatterns: string[]): string => {
+            for (const pattern of targetPatterns) {
+              const cleanPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
+              // Direct clean key match
+              if (normalizedMap.has(cleanPattern)) {
+                const val = normalizedMap.get(cleanPattern);
+                if (val !== undefined && val !== null && String(val).trim() !== '') {
+                  return String(val).trim();
+                }
+              }
+              // Substring key match
+              for (const [cleanKey, val] of normalizedMap.entries()) {
+                if (cleanKey.includes(cleanPattern) || cleanPattern.includes(cleanKey)) {
+                  if (val !== undefined && val !== null && String(val).trim() !== '') {
+                    return String(val).trim();
+                  }
+                }
+              }
+            }
+            return '';
+          };
+
+          // Helper to extract numeric value by fuzzy matching key targets
+          const getNumFuzzy = (targetPatterns: string[]): number => {
+            for (const pattern of targetPatterns) {
+              const cleanPattern = pattern.toLowerCase().replace(/[^a-z0-9]/g, '');
+              for (const [cleanKey, val] of normalizedMap.entries()) {
+                if (cleanKey.includes(cleanPattern)) {
+                  if (val !== undefined && val !== null) {
+                    const parsed = parseInt(String(val), 10);
+                    if (!isNaN(parsed)) return parsed;
+                  }
+                }
+              }
+            }
+            return 0;
+          };
+
+          let rawName = getStrFuzzy([
+            'facilityname',
+            'facility',
+            'healthfacility',
+            'organisationunit',
+            'orgunit',
+            'organisationunitname',
+            'orgunitname',
+            'subdistrict',
+            'clinic',
+            'chps',
+            'name',
+            'location',
+          ]);
+
+          let rawId = getStrFuzzy([
+            'facilityid',
+            'facilitycode',
+            'orgunitid',
+            'orgunitcode',
+            'code',
+            'id',
+          ]);
+
+          // Fallback: Scan row string values for health facility terms if headers weren't matched
+          if (!rawName && !rawId) {
+            for (const key of keys) {
+              const valStr = String(row[key] || '').trim();
+              if (
+                valStr.length >= 3 &&
+                !/^\d+$/.test(valStr) &&
+                (valStr.toLowerCase().includes('chps') ||
+                  valStr.toLowerCase().includes('centre') ||
+                  valStr.toLowerCase().includes('center') ||
+                  valStr.toLowerCase().includes('health') ||
+                  valStr.toLowerCase().includes('clinic') ||
+                  valStr.toLowerCase().includes('hospital') ||
+                  valStr.toLowerCase().includes('zongoire') ||
+                  valStr.toLowerCase().includes('apodabogo') ||
+                  valStr.toLowerCase().includes('dagunga'))
+              ) {
+                rawName = valStr;
+                break;
+              }
+            }
           }
+
+          // Ultimate fallback: If the row has data, generate a facility label rather than rejecting
+          if (!rawName && !rawId) {
+            // Check if row has any non-zero numbers
+            const hasNumbers = keys.some((k) => !isNaN(parseInt(String(row[k]), 10)) && parseInt(String(row[k]), 10) > 0);
+            if (hasNumbers) {
+              rawName = `Facility ${rowNum - 1}`;
+            } else {
+              // Row has no recognizeable data or facility name
+              return;
+            }
+          }
+
+          const facilityName = rawName || (rawId ? rawId.replace(/_/g, ' ').toUpperCase() : `Facility ${rowNum - 1}`);
+          const facilityId = rawId
+            ? rawId.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+            : facilityName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+          const year = getNumFuzzy(['year', 'period', 'reportingyear']) || new Date().getFullYear();
+          const month = getNumFuzzy(['month', 'period', 'reportingmonth']) || 8;
 
           const monthName = MONTH_NAMES[(month - 1) % 12] || 'January';
           const monthLabel = `${monthName.substring(0, 3)} ${year}`;
@@ -301,67 +413,88 @@ export async function parseUploadedExcel(file: File): Promise<{
             reportStatus: 'Submitted',
             submittedDate: new Date().toISOString().split('T')[0],
             epi: {
-              bcg: parseInt(row['BCG']) || 0,
-              opv0: parseInt(row['OPV 0']) || 0,
-              opv1: parseInt(row['OPV 1']) || 0,
-              opv2: parseInt(row['OPV 2']) || 0,
-              opv3: parseInt(row['OPV 3']) || 0,
-              penta1: parseInt(row['Penta 1']) || 0,
-              penta2: parseInt(row['Penta 2']) || 0,
-              penta3: parseInt(row['Penta 3']) || 0,
-              pcv1: parseInt(row['PCV 1']) || 0,
-              pcv2: parseInt(row['PCV 2']) || 0,
-              pcv3: parseInt(row['PCV 3']) || 0,
-              rota1: parseInt(row['Rota 1']) || 0,
-              rota2: parseInt(row['Rota 2']) || 0,
-              ipv: parseInt(row['IPV']) || 0,
-              mr1: parseInt(row['MR 1']) || 0,
-              mr2: parseInt(row['MR 2']) || 0,
-              yellowFever: parseInt(row['Yellow Fever']) || 0,
-              vitaminA: parseInt(row['Vitamin A (Children <1)']) || 0,
-              fullyImmunizedChild: parseInt(row['Fully Immunized Child (FIC)']) || 0,
-              tdTT: parseInt(row['Td / TT Doses']) || 0,
-              outreachSessionsDone: parseInt(row['Outreach Sessions Conducted']) || 0,
-              outreachSessionsPlanned: parseInt(row['Outreach Sessions Planned']) || 0,
-              staticSessionsDone: parseInt(row['Static Sessions Conducted']) || 0,
-              staticSessionsPlanned: parseInt(row['Static Sessions Planned']) || 0,
+              bcg: getNumFuzzy(['bcg']),
+              opv0: getNumFuzzy(['opv0']),
+              opv1: getNumFuzzy(['opv1']),
+              opv2: getNumFuzzy(['opv2']),
+              opv3: getNumFuzzy(['opv3']),
+              penta1: getNumFuzzy(['penta1', 'pentavalent1']),
+              penta2: getNumFuzzy(['penta2', 'pentavalent2']),
+              penta3: getNumFuzzy(['penta3', 'pentavalent3']),
+              pcv1: getNumFuzzy(['pcv1']),
+              pcv2: getNumFuzzy(['pcv2']),
+              pcv3: getNumFuzzy(['pcv3']),
+              rota1: getNumFuzzy(['rota1']),
+              rota2: getNumFuzzy(['rota2']),
+              ipv: getNumFuzzy(['ipv']),
+              mr1: getNumFuzzy(['mr1', 'measles1']),
+              mr2: getNumFuzzy(['mr2', 'measles2']),
+              yellowFever: getNumFuzzy(['yellowfever', 'yf']),
+              vitaminA: getNumFuzzy(['vitamina', 'vita']),
+              fullyImmunizedChild: getNumFuzzy(['fullyimmunized', 'fic']),
+              tdTT: getNumFuzzy(['td', 'tt']),
+              outreachSessionsDone: getNumFuzzy(['outreachdone', 'outreachconducted']),
+              outreachSessionsPlanned: getNumFuzzy(['outreachplanned']),
+              staticSessionsDone: getNumFuzzy(['staticdone', 'staticconducted']),
+              staticSessionsPlanned: getNumFuzzy(['staticplanned']),
             },
             diseaseSurveillance: {
-              malariaCases: parseInt(row['Malaria Cases (OPD)']) || 0,
-              diarrhoeaCases: parseInt(row['Diarrhoea Cases']) || 0,
-              pneumoniaCases: parseInt(row['Pneumonia Cases']) || 0,
-              urtiCases: parseInt(row['URTI Cases']) || 0,
-              typhoidCases: parseInt(row['Typhoid Cases']) || 0,
-              anaemiaCases: parseInt(row['Anaemia Cases']) || 0,
-              hypertensionCases: parseInt(row['Hypertension Cases']) || 0,
-              tbCases: parseInt(row['TB Confirmed Cases']) || 0,
-              measlesCases: parseInt(row['Measles Suspected Cases']) || 0,
-              choleraCases: parseInt(row['Cholera Cases']) || 0,
-              meningitisCases: parseInt(row['Meningitis Cases']) || 0,
+              malariaCases: getNumFuzzy(['malaria']),
+              diarrhoeaCases: getNumFuzzy(['diarrhoea', 'diarrhea']),
+              pneumoniaCases: getNumFuzzy(['pneumonia']),
+              urtiCases: getNumFuzzy(['urti']),
+              typhoidCases: getNumFuzzy(['typhoid']),
+              anaemiaCases: getNumFuzzy(['anaemia', 'anemia']),
+              hypertensionCases: getNumFuzzy(['hypertension']),
+              diabetesCases: getNumFuzzy(['diabetes']),
+              skinDiseasesCases: getNumFuzzy(['skindisease', 'skin', 'ulcer']),
+              rheumatismCases: getNumFuzzy(['rheumatism', 'jointpain']),
+              eyeInfectionsCases: getNumFuzzy(['eyeinfection', 'eye', 'conjunctivitis']),
+              intestinalWormsCases: getNumFuzzy(['intestinalworm', 'helminth']),
+              dentalCariesCases: getNumFuzzy(['dental', 'oral', 'caries']),
+              snakeBitesCases: getNumFuzzy(['snakebite', 'snake']),
+              dogBitesCases: getNumFuzzy(['dogbite', 'rabies']),
+              hepatitisBCases: getNumFuzzy(['hepatitis', 'hepb']),
+              tbCases: getNumFuzzy(['tbcases', 'tbconfirmed']),
+              measlesCases: getNumFuzzy(['measles']),
+              choleraCases: getNumFuzzy(['cholera']),
+              meningitisCases: getNumFuzzy(['meningitis']),
+              yellowFeverCases: getNumFuzzy(['yellowfever']),
+              afpCases: getNumFuzzy(['afp', 'flaccidparalysis', 'polio']),
+              schistosomiasisCases: getNumFuzzy(['schisto', 'bilharzia']),
+              pregnancyComplicationsCases: getNumFuzzy(['pregnancycomplication', 'pregnancyopd']),
             },
             maternalHealth: {
-              anc1: parseInt(row['ANC 1 Registrations']) || 0,
-              anc4: parseInt(row['ANC 4 Visits']) || 0,
-              anc8: parseInt(row['ANC 8 Visits']) || 0,
-              skilledDeliveries: parseInt(row['Skilled Deliveries']) || 0,
-              postnatalCare: parseInt(row['PNC Visits (within 48 hrs)']) || 0,
-              ipt1: parseInt(row['IPT 1 (Malaria Prophylaxis)']) || 0,
-              ipt2: parseInt(row['IPT 2']) || 0,
-              ipt3: parseInt(row['IPT 3']) || 0,
+              anc1: getNumFuzzy(['anc1']),
+              anc4: getNumFuzzy(['anc4']),
+              anc8: getNumFuzzy(['anc8']),
+              skilledDeliveries: getNumFuzzy(['skilleddeliver', 'delivery', 'deliveries']),
+              postnatalCare: getNumFuzzy(['pnc']),
+              ipt1: getNumFuzzy(['ipt1']),
+              ipt2: getNumFuzzy(['ipt2']),
+              ipt3: getNumFuzzy(['ipt3']),
+              teenagePregnancies: getNumFuzzy(['teenagepregnancy', 'teenpregnancy', 'teenage', 'adolescentpregnancy']),
+              ancAnaemiaRegistration: getNumFuzzy(['ancanaemiaregistration', 'anaemiabooking', 'ancanaemiareg', 'anaemiareg']),
+              ancAnaemia36Weeks: getNumFuzzy(['ancanaemia36', 'anaemia36weeks', 'anaemia36w', 'ancanaemia36w']),
             },
             childHealth: {
-              growthMonitoringAttended: parseInt(row['Growth Monitoring Attended']) || 0,
-              vitaminASupplementation: parseInt(row['Vitamin A Supplemented (<5)']) || 0,
-              deworming: parseInt(row['Dewormed (<5)']) || 0,
-              malnutritionScreened: parseInt(row['Malnutrition Screened']) || 0,
-              severeAcuteMalnutrition: parseInt(row['Severe Acute Malnutrition (SAM)']) || 0,
+              growthMonitoringAttended: getNumFuzzy(['growthmonitoring', 'weighing']),
+              vitaminASupplementation: getNumFuzzy(['vitaminasupplement']),
+              deworming: getNumFuzzy(['deworm']),
+              malnutritionScreened: getNumFuzzy(['malnutritionscreen']),
+              severeAcuteMalnutrition: getNumFuzzy(['severeacutemalnutrition', 'sam']),
+              moderateAcuteMalnutrition: getNumFuzzy(['moderateacutemalnutrition', 'mam']),
+              exclusiveBreastfeeding6Months: getNumFuzzy(['exclusivebreastfeeding', 'ebf6', 'ebf']),
+              earlyBreastfeedingInitiation: getNumFuzzy(['earlybreastfeeding', 'breastfeeding1hr', 'earlyinitiation']),
+              penta3Vaccinated: getNumFuzzy(['penta3vaccinated', 'penta3child']),
+              diarrhoeaTreatedOrsZinc: getNumFuzzy(['diarrhoeatorszinc', 'orszinc', 'diarrhoeatreated']),
             },
             tb: {
-              screened: parseInt(row['TB Screened']) || 0,
-              presumptiveCases: parseInt(row['TB Presumptive Cases']) || 0,
-              samplesCollected: parseInt(row['TB Samples Collected']) || 0,
-              confirmedCases: parseInt(row['TB Confirmed Cases Screened']) || 0,
-              treatmentInitiated: parseInt(row['TB Treatment Initiated']) || 0,
+              screened: getNumFuzzy(['tbscreen']),
+              presumptiveCases: getNumFuzzy(['tbrestump', 'tbpresump']),
+              samplesCollected: getNumFuzzy(['tbsample']),
+              confirmedCases: getNumFuzzy(['tbconfirm']),
+              treatmentInitiated: getNumFuzzy(['tbtreat']),
             },
           };
 

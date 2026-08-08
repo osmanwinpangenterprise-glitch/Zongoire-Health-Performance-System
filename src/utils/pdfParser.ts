@@ -144,36 +144,39 @@ function parseSingleFacilityPdfSection(
   index: number
 ): FacilityMonthlyData | null {
   const cleanText = text.replace(/\s+/g, ' ');
-
-  // Identify facility name & ID
-  let facilityId = 'zongoire_hc';
-  let facilityName = 'Zongoire Health Centre';
-
   const lowerText = cleanText.toLowerCase();
-  if (lowerText.includes('zongoire chps')) {
-    facilityId = 'zongoire_chps';
-    facilityName = 'Zongoire CHPS';
-  } else if (lowerText.includes('apodabogo') || lowerText.includes('apodabogo chps')) {
-    facilityId = 'apodabogo_chps';
-    facilityName = 'Apodabogo CHPS';
-  } else if (lowerText.includes('dagunga') || lowerText.includes('dagunga chps')) {
-    facilityId = 'dagunga_chps';
-    facilityName = 'Dagunga CHPS';
-  } else if (lowerText.includes('zongoire health centre') || lowerText.includes('zongoire hc')) {
-    facilityId = 'zongoire_hc';
-    facilityName = 'Zongoire Health Centre';
-  } else {
-    // If multiple facilities in sequential order
-    const knownList = [
-      { id: 'zongoire_hc', name: 'Zongoire Health Centre' },
-      { id: 'zongoire_chps', name: 'Zongoire CHPS' },
-      { id: 'apodabogo_chps', name: 'Apodabogo CHPS' },
-      { id: 'dagunga_chps', name: 'Dagunga CHPS' },
-    ];
-    const item = knownList[index % knownList.length];
-    facilityId = item.id;
-    facilityName = item.name;
+
+  // Identify facility name & ID dynamically
+  let facilityName = '';
+  let facilityId = '';
+
+  // Check explicit labels in text: "Facility: ...", "Health Facility: ...", "OrgUnit: ..."
+  const labelMatch = cleanText.match(/(?:Facility Name|Health Facility|Facility|OrgUnit)\s*[:\-=]\s*([A-Za-z0-9\s\-_]{3,40})/i);
+  if (labelMatch && labelMatch[1]) {
+    facilityName = labelMatch[1].trim();
   }
+
+  if (!facilityName) {
+    if (lowerText.includes('zongoire chps')) {
+      facilityName = 'Zongoire CHPS';
+    } else if (lowerText.includes('apodabogo')) {
+      facilityName = 'Apodabogo CHPS';
+    } else if (lowerText.includes('dagunga')) {
+      facilityName = 'Dagunga CHPS';
+    } else if (lowerText.includes('zongoire health centre') || lowerText.includes('zongoire hc')) {
+      facilityName = 'Zongoire Health Centre';
+    } else {
+      // Look for any word sequence ending with CHPS, Health Centre, Hospital, or Clinic
+      const matchPattern = cleanText.match(/([A-Z][A-Za-z0-9\s]+(?:CHPS|Health Centre|Hospital|Clinic|HC))/);
+      if (matchPattern && matchPattern[1]) {
+        facilityName = matchPattern[1].trim();
+      } else {
+        facilityName = `Facility ${index + 1}`;
+      }
+    }
+  }
+
+  facilityId = facilityName.toLowerCase().replace(/[^a-z0-9]+/g, '_');
 
   // Identify Year & Month
   let year = new Date().getFullYear();
@@ -253,10 +256,23 @@ function parseSingleFacilityPdfSection(
       typhoidCases: extractVal(['Typhoid Cases', 'Typhoid'], 8),
       anaemiaCases: extractVal(['Anaemia Cases', 'Anaemia'], 12),
       hypertensionCases: extractVal(['Hypertension Cases', 'Hypertension'], 18),
+      diabetesCases: extractVal(['Diabetes Cases', 'Diabetes'], 10),
+      skinDiseasesCases: extractVal(['Skin Diseases', 'Ulcers'], 18),
+      rheumatismCases: extractVal(['Rheumatism', 'Joint Pains'], 12),
+      eyeInfectionsCases: extractVal(['Eye Infections', 'Conjunctivitis'], 12),
+      intestinalWormsCases: extractVal(['Intestinal Worms', 'Helminthiasis'], 15),
+      dentalCariesCases: extractVal(['Dental Conditions', 'Caries'], 5),
+      snakeBitesCases: extractVal(['Snake Bites', 'Envenomation'], 1),
+      dogBitesCases: extractVal(['Dog Bites', 'Rabies'], 0),
+      hepatitisBCases: extractVal(['Hepatitis B', 'Viral Hepatitis'], 2),
       tbCases: extractVal(['TB Confirmed Cases', 'TB Cases'], 1),
       measlesCases: extractVal(['Measles Suspected Cases', 'Measles Cases'], 0),
       choleraCases: extractVal(['Cholera Cases', 'Cholera'], 0),
       meningitisCases: extractVal(['Meningitis Cases', 'Meningitis'], 0),
+      yellowFeverCases: extractVal(['Yellow Fever'], 0),
+      afpCases: extractVal(['Acute Flaccid Paralysis', 'AFP'], 0),
+      schistosomiasisCases: extractVal(['Schistosomiasis', 'Bilharzia'], 3),
+      pregnancyComplicationsCases: extractVal(['Pregnancy Complications'], 6),
     },
     maternalHealth: {
       anc1: extractVal(['ANC 1 Registrations', 'ANC 1', 'ANC1'], 28),
@@ -267,6 +283,9 @@ function parseSingleFacilityPdfSection(
       ipt1: extractVal(['IPT 1 (Malaria Prophylaxis)', 'IPT 1', 'IPT1'], 26),
       ipt2: extractVal(['IPT 2', 'IPT2'], 24),
       ipt3: extractVal(['IPT 3', 'IPT3'], 22),
+      teenagePregnancies: extractVal(['Teenage Pregnancies', 'Teen Pregnancy', 'Teenage'], 5),
+      ancAnaemiaRegistration: extractVal(['ANC Anaemia @ Registration', 'Anaemia at Booking', 'Anaemia Registration'], 8),
+      ancAnaemia36Weeks: extractVal(['ANC Anaemia @ 36 Weeks', 'Anaemia at 36 Weeks', 'Anaemia 36 Weeks'], 3),
     },
     childHealth: {
       growthMonitoringAttended: extractVal(['Growth Monitoring Attended', 'Growth Monitoring'], 115),
@@ -274,6 +293,11 @@ function parseSingleFacilityPdfSection(
       deworming: extractVal(['Dewormed (<5)', 'Dewormed'], 35),
       malnutritionScreened: extractVal(['Malnutrition Screened'], 120),
       severeAcuteMalnutrition: extractVal(['Severe Acute Malnutrition (SAM)', 'SAM Cases'], 1),
+      moderateAcuteMalnutrition: extractVal(['Moderate Acute Malnutrition (MAM)', 'MAM Cases'], 3),
+      exclusiveBreastfeeding6Months: extractVal(['Exclusive Breastfeeding @ 6 Months', 'Exclusive Breastfeeding'], 18),
+      earlyBreastfeedingInitiation: extractVal(['Early Breastfeeding Initiation (<1hr)', 'Early Breastfeeding'], 20),
+      penta3Vaccinated: extractVal(['Penta 3 Immunized', 'Penta 3'], 22),
+      diarrhoeaTreatedOrsZinc: extractVal(['Under-5 Diarrhoea Treated w/ ORS & Zinc', 'ORS & Zinc'], 14),
     },
     tb: {
       screened: extractVal(['TB Screened'], 40),

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Navbar } from './components/Navbar';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { Dhims2Importer } from './components/Dhims2Importer';
+import { DataEntryModule } from './components/DataEntryModule';
 import { PopulationManager } from './components/PopulationManager';
 import { EpiModule } from './components/EpiModule';
 import { DiseaseSurveillance } from './components/DiseaseSurveillance';
@@ -111,19 +112,21 @@ export default function App() {
   }, [darkMode]);
 
   // Filter dataset based on selected period and year
-  const filteredData = monthlyData.filter((d) => {
-    if (d.year !== selectedYear) return false;
-    if (selectedPeriodType === 'monthly') {
-      return d.month === selectedMonth;
-    } else if (selectedPeriodType === 'quarterly') {
-      const q = Math.ceil(selectedMonth / 3);
-      const rowQ = Math.ceil(d.month / 3);
-      return rowQ === q;
-    } else if (selectedPeriodType === 'midyear') {
-      return d.month <= 6;
-    }
-    return true; // Annual
-  });
+  const filteredData = useMemo(() => {
+    return monthlyData.filter((d) => {
+      if (d.year !== selectedYear) return false;
+      if (selectedPeriodType === 'monthly') {
+        return d.month === selectedMonth;
+      } else if (selectedPeriodType === 'quarterly') {
+        const q = Math.ceil(selectedMonth / 3);
+        const rowQ = Math.ceil(d.month / 3);
+        return rowQ === q;
+      } else if (selectedPeriodType === 'midyear') {
+        return d.month <= 6;
+      }
+      return true; // Annual
+    });
+  }, [monthlyData, selectedYear, selectedMonth, selectedPeriodType]);
 
   // Period label generator
   const getPeriodLabel = () => {
@@ -155,28 +158,109 @@ export default function App() {
   const periodLabel = getPeriodLabel();
 
   // Calculated Metrics & Alerts
-  const calculatedMetrics = facilities.map((f) =>
-    calculateFacilityMetrics(f, filteredData)
-  );
-  const alerts = calculateSubDistrictAlerts(calculatedMetrics, filteredData);
+  const calculatedMetrics = useMemo(() => {
+    return facilities.map((f) => calculateFacilityMetrics(f, filteredData));
+  }, [facilities, filteredData]);
 
-  // Handle uploaded new DHIMS2 Excel dataset
+  const alerts = useMemo(() => {
+    return calculateSubDistrictAlerts(calculatedMetrics, filteredData);
+  }, [calculatedMetrics, filteredData]);
+
+  // Handle uploaded new DHIMS2 Excel/PDF dataset
   const handleDataUploaded = (newRecords: FacilityMonthlyData[]) => {
     setMonthlyData((prev) => [...newRecords, ...prev]);
+
+    // Automatically register any newly encountered facility names
+    const newFacilitiesToRegister: Facility[] = [];
+    const existingIds = new Set(facilities.map((f) => f.id));
+    const existingNames = new Set(facilities.map((f) => f.name.toLowerCase()));
+
+    newRecords.forEach((rec) => {
+      const recId = rec.facilityId;
+      const recName = rec.facilityName;
+      if (!existingIds.has(recId) && !existingNames.has(recName.toLowerCase())) {
+        const isCHPS = recName.toLowerCase().includes('chps');
+        const estPop = isCHPS ? 2500 : 5500;
+        newFacilitiesToRegister.push({
+          id: recId,
+          name: recName,
+          type: isCHPS ? 'CHPS' : 'Health Centre',
+          subDistrict: 'Zongoire',
+          district: 'Bawku West',
+          region: 'Upper East',
+          inCharge: 'Facility Officer',
+          contact: '+233 20 000 0000',
+          targetPopulation: {
+            catchmentPopulation: estPop,
+            expectedPregnancies: Math.round(estPop * 0.04),
+            expectedDeliveries: Math.round(estPop * 0.038),
+            childrenUnder1: Math.round(estPop * 0.04),
+            childrenUnder5: Math.round(estPop * 0.20),
+            womenOfReproductiveAge: Math.round(estPop * 0.24),
+          },
+        });
+        existingIds.add(recId);
+        existingNames.add(recName.toLowerCase());
+      }
+    });
+
+    if (newFacilitiesToRegister.length > 0) {
+      setFacilities((prev) => [...prev, ...newFacilitiesToRegister]);
+    }
+
+    // Automatically set view filters to match the imported period
+    if (newRecords.length > 0) {
+      if (newRecords[0].year) setSelectedYear(newRecords[0].year);
+      if (newRecords[0].month) setSelectedMonth(newRecords[0].month);
+    }
 
     // Create new audit log
     const newLog: AuditLog = {
       id: `LOG_${Date.now()}`,
-      fileName: 'DHIMS2_Monthly_Import.xlsx',
+      fileName: 'DHIMS2_Import_Batch',
       uploadedBy: userEmail,
       userRole: userRole === 'admin' ? 'Administrator' : userRole,
       timestamp: new Date().toLocaleString(),
       status: 'Success',
       recordsProcessed: newRecords.length,
       period: periodLabel,
-      details: 'Parsed & validated via Excel Import Module',
+      details: `Parsed & validated ${newRecords.length} records across ${
+        new Set(newRecords.map((r) => r.facilityName)).size
+      } health facility/facilities`,
     };
 
+    setAuditLogs((prev) => [newLog, ...prev]);
+  };
+
+  // Handle single record manual entry save
+  const handleSingleRecordSaved = (savedRecord: FacilityMonthlyData) => {
+    setMonthlyData((prev) => {
+      const idx = prev.findIndex(
+        (d) =>
+          d.facilityId === savedRecord.facilityId &&
+          d.year === savedRecord.year &&
+          d.month === savedRecord.month
+      );
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = savedRecord;
+        return updated;
+      }
+      return [savedRecord, ...prev];
+    });
+
+    // Create audit log
+    const newLog: AuditLog = {
+      id: `LOG_${Date.now()}`,
+      fileName: 'Manual_Data_Entry_Form',
+      uploadedBy: userEmail,
+      userRole: userRole === 'admin' ? 'Administrator' : userRole,
+      timestamp: new Date().toLocaleString(),
+      status: 'Success',
+      recordsProcessed: 1,
+      period: savedRecord.monthLabel,
+      details: `Manual monthly data submitted for ${savedRecord.facilityName}`,
+    };
     setAuditLogs((prev) => [newLog, ...prev]);
   };
 
@@ -222,6 +306,19 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'entry' && (
+          <DataEntryModule
+            facilities={facilities}
+            monthlyData={monthlyData}
+            onSaveRecord={handleSingleRecordSaved}
+            userRole={userRole}
+            userEmail={userEmail}
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            onNavigateTab={setActiveTab}
+          />
+        )}
+
         {activeTab === 'importer' && (
           <Dhims2Importer
             onDataUploaded={handleDataUploaded}
@@ -229,6 +326,7 @@ export default function App() {
             userRole={userRole}
             onRestoreBaselineData={handleRestoreBaseline}
             onClearAllData={handleClearAllData}
+            onNavigateTab={setActiveTab}
           />
         )}
 

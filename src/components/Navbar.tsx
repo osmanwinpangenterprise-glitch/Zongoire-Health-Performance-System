@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Activity,
   Upload,
+  Edit3,
   UserCheck,
   Moon,
   Sun,
@@ -65,6 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navItems = [
     { id: 'dashboard', label: 'Executive Dashboard', icon: Activity },
+    { id: 'entry', label: 'Data Entry', icon: Edit3 },
     { id: 'importer', label: 'DHIMS2 Upload', icon: Upload },
     { id: 'population', label: 'Targets & Population', icon: Users },
     { id: 'epi', label: 'EPI Immunization', icon: Layers },

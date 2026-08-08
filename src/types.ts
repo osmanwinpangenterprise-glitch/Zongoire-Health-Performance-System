@@ -62,10 +62,23 @@ export interface DiseaseSurveillanceData {
   typhoidCases: number;
   anaemiaCases: number;
   hypertensionCases: number;
+  diabetesCases: number; // Diabetes Mellitus (NCD)
+  skinDiseasesCases: number; // Skin Diseases & Ulcers
+  rheumatismCases: number; // Rheumatism & Joint Pains
+  eyeInfectionsCases: number; // Acute Eye Infections / Conjunctivitis
+  intestinalWormsCases: number; // Intestinal Worms / Helminthiasis
+  dentalCariesCases: number; // Dental & Oral Conditions
+  snakeBitesCases: number; // Snake Bites & Envenomation
+  dogBitesCases: number; // Dog Bites / Suspected Rabies
+  hepatitisBCases: number; // Viral Hepatitis (B & C)
   tbCases: number;
-  measlesCases: number;
+  measlesCases: number; // Suspected Measles
   choleraCases: number;
-  meningitisCases: number;
+  meningitisCases: number; // Acute Bacterial Meningitis
+  yellowFeverCases: number; // Suspected Yellow Fever / Acute Jaundice
+  afpCases: number; // Acute Flaccid Paralysis
+  schistosomiasisCases: number; // Schistosomiasis / Bilharzia
+  pregnancyComplicationsCases: number; // Pregnancy-related OPD Conditions
 }
 
 export interface MaternalHealthData {
@@ -77,6 +90,9 @@ export interface MaternalHealthData {
   ipt1: number; // Intermittent Preventive Treatment for Malaria in Pregnancy
   ipt2: number;
   ipt3: number;
+  teenagePregnancies: number; // Teenage Pregnancy cases (10-19 years)
+  ancAnaemiaRegistration: number; // Pregnant women with Anaemia at ANC registration (<11g/dl)
+  ancAnaemia36Weeks: number; // Pregnant women with Anaemia at 36 weeks term (<11g/dl)
 }
 
 export interface ChildHealthData {
@@ -84,7 +100,12 @@ export interface ChildHealthData {
   vitaminASupplementation: number;
   deworming: number;
   malnutritionScreened: number;
-  severeAcuteMalnutrition: number;
+  severeAcuteMalnutrition: number; // SAM cases
+  moderateAcuteMalnutrition: number; // MAM cases
+  exclusiveBreastfeeding6Months: number; // EBF at 6 months
+  earlyBreastfeedingInitiation: number; // Put to breast within 1 hour
+  penta3Vaccinated: number; // Penta 3 immunization
+  diarrhoeaTreatedOrsZinc: number; // Under-5 diarrhoea treated with ORS & Zinc
 }
 
 export interface TbData {
@@ -132,6 +153,8 @@ export interface CalculatedFacilityMetrics {
   skilledDeliveryRate: number;
   pncCoverageRate: number;
   ipt3CoverageRate: number;
+  teenagePregnancyRate: number; // (Teenage Pregnancies / ANC1) * 100
+  ancAnaemiaRegistrationRate: number; // (ANC Anaemia at Booking / ANC1) * 100
   
   // Child
   growthMonitoringRate: number;
