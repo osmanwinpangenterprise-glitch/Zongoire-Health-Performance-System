@@ -52,12 +52,20 @@ export const EpiModule: React.FC<EpiModuleProps> = ({
       acc.pcv2 += e.pcv2;
       acc.pcv3 += e.pcv3;
       acc.rota1 += e.rota1;
-      acc.rota2 += e.rota2;
-      acc.ipv += e.ipv;
-      acc.mr1 += e.mr1;
-      acc.mr2 += e.mr2;
-      acc.yellowFever += e.yellowFever;
-      acc.fic += e.fullyImmunizedChild;
+      acc.rota2 += e.rota2 || 0;
+      acc.ipv += e.ipv || 0;
+      acc.ipv2 += e.ipv2 || 0;
+      acc.mr1 += e.mr1 || 0;
+      acc.mr2 += e.mr2 || 0;
+      acc.yellowFever += e.yellowFever || 0;
+      acc.menA += e.menA || 0;
+      acc.malaria1 += e.malaria1 || 0;
+      acc.malaria2 += e.malaria2 || 0;
+      acc.malaria3 += e.malaria3 || 0;
+      acc.malaria4 += e.malaria4 || 0;
+      acc.hpv1 += e.hpv1 || 0;
+      acc.hpv2 += e.hpv2 || 0;
+      acc.fic += e.fullyImmunizedChild || 0;
       acc.outreachDone += e.outreachSessionsDone;
       acc.outreachPlanned += e.outreachSessionsPlanned;
       acc.staticDone += e.staticSessionsDone;
@@ -79,9 +87,17 @@ export const EpiModule: React.FC<EpiModuleProps> = ({
       rota1: 0,
       rota2: 0,
       ipv: 0,
+      ipv2: 0,
       mr1: 0,
       mr2: 0,
       yellowFever: 0,
+      menA: 0,
+      malaria1: 0,
+      malaria2: 0,
+      malaria3: 0,
+      malaria4: 0,
+      hpv1: 0,
+      hpv2: 0,
       fic: 0,
       outreachDone: 0,
       outreachPlanned: 0,
@@ -272,8 +288,11 @@ export const EpiModule: React.FC<EpiModuleProps> = ({
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase tracking-wider">
                 <th className="py-2 px-3">Facility</th>
+                <th className="py-2 px-3 text-center">Data Source</th>
                 <th className="py-2 px-3 text-center">Penta1 Cov</th>
                 <th className="py-2 px-3 text-center">Penta3 Cov</th>
+                <th className="py-2 px-3 text-center">RTS,S Mal3 '26</th>
+                <th className="py-2 px-3 text-center">HPV1 '26</th>
                 <th className="py-2 px-3 text-center">Penta Dropout</th>
                 <th className="py-2 px-3 text-center">MR1 Cov</th>
                 <th className="py-2 px-3 text-center">FIC Rate</th>
@@ -283,15 +302,34 @@ export const EpiModule: React.FC<EpiModuleProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {metrics.map((m) => {
-                const facData = monthlyData.find((d) => d.facilityId === m.facilityId);
+                const facDataList = monthlyData.filter((d) => d.facilityId === m.facilityId);
+                const facData = facDataList[0];
+                const isActual = facDataList.some((d) => d.isSample === false || d.dataSource === 'actual');
                 return (
                   <tr key={m.facilityId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
                     <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-white">
                       {m.facilityName}
                     </td>
+                    <td className="py-2.5 px-3 text-center">
+                      {isActual ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                          ACTUAL
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                          SAMPLE
+                        </span>
+                      )}
+                    </td>
                     <td className="py-2.5 px-3 text-center font-semibold">{m.penta1CoverageRate}%</td>
                     <td className="py-2.5 px-3 text-center font-bold text-[#006633] dark:text-emerald-400">
                       {m.penta3CoverageRate}%
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
+                      {m.malaria3CoverageRate || 0}%
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20">
+                      {m.hpv1CoverageRate || 0}%
                     </td>
                     <td className="py-2.5 px-3 text-center font-bold">
                       <span className={m.pentaDropoutRate <= 10 ? 'text-green-600' : 'text-red-600'}>

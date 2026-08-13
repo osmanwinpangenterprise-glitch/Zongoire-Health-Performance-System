@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   Upload,
@@ -15,8 +15,13 @@ import {
   Bell,
   Building2,
   Calendar,
+  Download,
+  Filter,
+  Database,
 } from 'lucide-react';
 import { UserRole } from '../types';
+
+export type DataSourceFilter = 'all' | 'actual' | 'sample';
 
 interface NavbarProps {
   activeTab: string;
@@ -32,6 +37,9 @@ interface NavbarProps {
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
   alertCount: number;
+  dataSourceFilter: DataSourceFilter;
+  setDataSourceFilter: (filter: DataSourceFilter) => void;
+  dataStats: { total: number; sample: number; actual: number };
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -48,7 +56,40 @@ export const Navbar: React.FC<NavbarProps> = ({
   darkMode,
   setDarkMode,
   alertCount,
+  dataSourceFilter,
+  setDataSourceFilter,
+  dataStats,
 }) => {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+      setDeferredPrompt(null);
+    } else {
+      alert('To install this app on your device:\n\n• On Chrome/Edge: Click the install icon in the address bar.\n• On iOS Safari: Tap "Share" and select "Add to Home Screen".');
+    }
+  };
+
   const months = [
     { value: 1, label: 'January' },
     { value: 2, label: 'February' },
@@ -148,6 +189,69 @@ export const Navbar: React.FC<NavbarProps> = ({
             <option value={2026} className="bg-[#006633] text-white">2026</option>
             <option value={2025} className="bg-[#006633] text-white">2025</option>
           </select>
+
+          {/* Data Source Filter Switcher (Sample vs Actual) */}
+          <div className="flex items-center space-x-1 bg-green-950/90 dark:bg-slate-900/90 p-0.5 rounded border border-green-700/70 text-xs">
+            <span className="text-[10px] text-green-300 dark:text-slate-400 font-bold px-1 hidden md:inline flex items-center space-x-1">
+              <Database className="w-3 h-3 text-amber-300 inline mr-0.5" />
+              <span>Data:</span>
+            </span>
+            <button
+              id="data-filter-all"
+              type="button"
+              onClick={() => setDataSourceFilter('all')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                dataSourceFilter === 'all'
+                  ? 'bg-amber-400 text-slate-950 font-extrabold shadow-sm'
+                  : 'text-green-200 dark:text-slate-300 hover:text-white hover:bg-green-800/50'
+              }`}
+              title={`Showing all dataset records: ${dataStats.actual} Actual + ${dataStats.sample} Sample`}
+            >
+              All ({dataStats.total})
+            </button>
+            <button
+              id="data-filter-actual"
+              type="button"
+              onClick={() => setDataSourceFilter('actual')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center space-x-1 ${
+                dataSourceFilter === 'actual'
+                  ? 'bg-emerald-400 text-slate-950 font-extrabold shadow-sm'
+                  : 'text-emerald-200 dark:text-emerald-400 hover:text-white hover:bg-green-800/50'
+              }`}
+              title={`Show only live actual DHIMS2 imported or entered records (${dataStats.actual})`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-700 dark:bg-emerald-300"></span>
+              <span>Actual ({dataStats.actual})</span>
+            </button>
+            <button
+              id="data-filter-sample"
+              type="button"
+              onClick={() => setDataSourceFilter('sample')}
+              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-all cursor-pointer flex items-center space-x-1 ${
+                dataSourceFilter === 'sample'
+                  ? 'bg-amber-300 text-slate-950 font-extrabold shadow-sm'
+                  : 'text-amber-200 dark:text-amber-400 hover:text-white hover:bg-green-800/50'
+              }`}
+              title={`Show only baseline sample/demo records (${dataStats.sample})`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-600 dark:bg-amber-300"></span>
+              <span>Sample ({dataStats.sample})</span>
+            </button>
+          </div>
+
+          {/* PWA Install Button */}
+          {!isInstalled && (
+            <button
+              id="pwa-install-btn"
+              type="button"
+              onClick={handleInstallClick}
+              className="text-[11px] bg-emerald-700 hover:bg-emerald-600 text-white px-2.5 py-1 rounded font-bold uppercase tracking-wider flex items-center space-x-1.5 transition-all border border-emerald-500 shadow-sm cursor-pointer"
+              title="Install Ghana Health Service M&E App on your device"
+            >
+              <Download className="w-3.5 h-3.5 text-[#FFD700]" />
+              <span className="hidden sm:inline">INSTALL APP</span>
+            </button>
+          )}
 
           {/* User Role Toggle */}
           <button

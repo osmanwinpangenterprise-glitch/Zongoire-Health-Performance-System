@@ -35,6 +35,7 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<number>(6); // June 2026
   const [selectedPeriodType, setSelectedPeriodType] = useState<ReviewType>('monthly');
+  const [dataSourceFilter, setDataSourceFilter] = useState<'all' | 'actual' | 'sample'>('all');
   const [userRole, setUserRole] = useState<UserRole>('admin');
   const [userEmail, setUserEmail] = useState<string>('sdhmt.admin@ghs.gov.gh');
   const [darkMode, setDarkMode] = useState<boolean>(false);
@@ -111,9 +112,20 @@ export default function App() {
     }
   }, [darkMode]);
 
-  // Filter dataset based on selected period and year
+  // Calculate breakdown between sample baseline records and live actual records
+  const dataStats = useMemo(() => {
+    const sample = monthlyData.filter((d) => d.isSample !== false && d.dataSource !== 'actual').length;
+    const actual = monthlyData.filter((d) => d.isSample === false || d.dataSource === 'actual').length;
+    return { total: monthlyData.length, sample, actual };
+  }, [monthlyData]);
+
+  // Filter dataset based on selected data source, period, and year
   const filteredData = useMemo(() => {
     return monthlyData.filter((d) => {
+      const isRecordSample = d.isSample !== false && d.dataSource !== 'actual';
+      if (dataSourceFilter === 'actual' && isRecordSample) return false;
+      if (dataSourceFilter === 'sample' && !isRecordSample) return false;
+
       if (d.year !== selectedYear) return false;
       if (selectedPeriodType === 'monthly') {
         return d.month === selectedMonth;
@@ -126,7 +138,7 @@ export default function App() {
       }
       return true; // Annual
     });
-  }, [monthlyData, selectedYear, selectedMonth, selectedPeriodType]);
+  }, [monthlyData, selectedYear, selectedMonth, selectedPeriodType, dataSourceFilter]);
 
   // Period label generator
   const getPeriodLabel = () => {
@@ -270,7 +282,12 @@ export default function App() {
     setFacilities(INITIAL_FACILITIES);
   };
 
-  // Handle clearing all sample data
+  // Handle purging only sample/demo data to leave clean actual dataset
+  const handleClearSampleData = () => {
+    setMonthlyData((prev) => prev.filter((d) => d.isSample === false || d.dataSource === 'actual'));
+  };
+
+  // Handle clearing all sample data & actual data
   const handleClearAllData = () => {
     setMonthlyData([]);
   };
@@ -288,9 +305,13 @@ export default function App() {
         selectedPeriodType={selectedPeriodType}
         setSelectedPeriodType={setSelectedPeriodType}
         userRole={userRole}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        setUserRole={setUserRole}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
+        alertCount={alerts.length}
+        dataSourceFilter={dataSourceFilter}
+        setDataSourceFilter={setDataSourceFilter}
+        dataStats={dataStats}
       />
 
       {/* Main Body Content Viewport */}
@@ -325,7 +346,9 @@ export default function App() {
             auditLogs={auditLogs}
             userRole={userRole}
             onRestoreBaselineData={handleRestoreBaseline}
+            onClearSampleData={handleClearSampleData}
             onClearAllData={handleClearAllData}
+            dataStats={dataStats}
             onNavigateTab={setActiveTab}
           />
         )}

@@ -89,8 +89,10 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
         bcg: 0, opv0: 0, opv1: 0, opv2: 0, opv3: 0,
         penta1: 0, penta2: 0, penta3: 0,
         pcv1: 0, pcv2: 0, pcv3: 0,
-        rota1: 0, rota2: 0, ipv: 0,
-        mr1: 0, mr2: 0, yellowFever: 0,
+        rota1: 0, rota2: 0, ipv: 0, ipv2: 0,
+        mr1: 0, mr2: 0, yellowFever: 0, menA: 0,
+        malaria1: 0, malaria2: 0, malaria3: 0, malaria4: 0,
+        hpv1: 0, hpv2: 0,
         vitaminA: 0, fullyImmunizedChild: 0, tdTT: 0,
         outreachSessionsDone: 0, outreachSessionsPlanned: 0,
         staticSessionsDone: 0, staticSessionsPlanned: 0,
@@ -178,9 +180,17 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
         rota1: isCHPS ? 21 : 39,
         rota2: isCHPS ? 20 : 37,
         ipv: isCHPS ? 19 : 35,
+        ipv2: isCHPS ? 18 : 33,
         mr1: isCHPS ? 18 : 34,
         mr2: isCHPS ? 16 : 30,
         yellowFever: isCHPS ? 18 : 34,
+        menA: isCHPS ? 18 : 34,
+        malaria1: isCHPS ? 20 : 38,
+        malaria2: isCHPS ? 19 : 36,
+        malaria3: isCHPS ? 18 : 34,
+        malaria4: isCHPS ? 16 : 30,
+        hpv1: isCHPS ? 12 : 24,
+        hpv2: isCHPS ? 10 : 20,
         vitaminA: isCHPS ? 35 : 65,
         fullyImmunizedChild: isCHPS ? 17 : 32,
         tdTT: isCHPS ? 22 : 45,
@@ -298,6 +308,8 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
       monthLabel,
       reportStatus: 'Submitted',
       submittedDate: new Date().toISOString().split('T')[0],
+      dataSource: 'actual',
+      isSample: false,
     };
 
     onSaveRecord(recordToCommit);
@@ -576,10 +588,18 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
               <InputField label="PCV 3 (14 Weeks)" val={formData.epi.pcv3} onChange={(v) => handleNumChange('epi', 'pcv3', v)} />
               <InputField label="Rota 1 (6 Weeks)" val={formData.epi.rota1} onChange={(v) => handleNumChange('epi', 'rota1', v)} />
               <InputField label="Rota 2 (10 Weeks)" val={formData.epi.rota2} onChange={(v) => handleNumChange('epi', 'rota2', v)} />
-              <InputField label="IPV (14 Weeks)" val={formData.epi.ipv} onChange={(v) => handleNumChange('epi', 'ipv', v)} />
+              <InputField label="IPV 1 (14 Weeks)" val={formData.epi.ipv} onChange={(v) => handleNumChange('epi', 'ipv', v)} />
+              <InputField label="IPV 2 (2026 Schedule)" val={formData.epi.ipv2} onChange={(v) => handleNumChange('epi', 'ipv2', v)} />
               <InputField label="MR 1 (Measles 9 Months)" val={formData.epi.mr1} onChange={(v) => handleNumChange('epi', 'mr1', v)} />
               <InputField label="MR 2 (Measles 18 Months)" val={formData.epi.mr2} onChange={(v) => handleNumChange('epi', 'mr2', v)} />
               <InputField label="Yellow Fever (9 Months)" val={formData.epi.yellowFever} onChange={(v) => handleNumChange('epi', 'yellowFever', v)} />
+              <InputField label="Meningitis A (MenA)" val={formData.epi.menA} onChange={(v) => handleNumChange('epi', 'menA', v)} />
+              <InputField label="Malaria Vaccine Dose 1 (6 Mos)" val={formData.epi.malaria1} onChange={(v) => handleNumChange('epi', 'malaria1', v)} highlight />
+              <InputField label="Malaria Vaccine Dose 2 (7 Mos)" val={formData.epi.malaria2} onChange={(v) => handleNumChange('epi', 'malaria2', v)} />
+              <InputField label="Malaria Vaccine Dose 3 (9 Mos)" val={formData.epi.malaria3} onChange={(v) => handleNumChange('epi', 'malaria3', v)} highlight />
+              <InputField label="Malaria Vaccine Dose 4 (18-24 Mos)" val={formData.epi.malaria4} onChange={(v) => handleNumChange('epi', 'malaria4', v)} highlight />
+              <InputField label="HPV Dose 1 (Girls 9-14 Yrs)" val={formData.epi.hpv1} onChange={(v) => handleNumChange('epi', 'hpv1', v)} highlight />
+              <InputField label="HPV Dose 2 (Girls 9-14 Yrs)" val={formData.epi.hpv2} onChange={(v) => handleNumChange('epi', 'hpv2', v)} />
               <InputField label="Vitamin A (<1 Year)" val={formData.epi.vitaminA} onChange={(v) => handleNumChange('epi', 'vitaminA', v)} />
               <InputField label="Fully Immunized Child (FIC)" val={formData.epi.fullyImmunizedChild} onChange={(v) => handleNumChange('epi', 'fullyImmunizedChild', v)} highlight />
               <InputField label="Td / TT Doses (Maternal)" val={formData.epi.tdTT} onChange={(v) => handleNumChange('epi', 'tdTT', v)} />

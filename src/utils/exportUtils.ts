@@ -81,3 +81,71 @@ export function exportDataToExcel(data: any[], filename = 'health-data.xlsx', sh
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   XLSX.writeFile(workbook, filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`);
 }
+
+/**
+ * Exports a detailed facility-specific M&E report in Excel format
+ */
+export function exportFacilitySpecificReport(
+  facilityMetrics: any,
+  facilityMonthlyRecords: any[],
+  periodLabel: string
+) {
+  const summarySheetData = [
+    { Indicator: 'Facility Name', Value: facilityMetrics.facilityName },
+    { Indicator: 'Reporting Period', Value: periodLabel },
+    { Indicator: 'Official Credential Verification Code', Value: facilityMetrics.credentialVerificationCode || 'N/A' },
+    { Indicator: 'Performance Grade', Value: facilityMetrics.gradeLabel || 'N/A' },
+    { Indicator: 'Overall Weighted Score', Value: `${facilityMetrics.overallScore}%` },
+    { Indicator: 'Sub-District Ranking', Value: `Rank #${facilityMetrics.rank}` },
+    { Indicator: 'Penta1 Coverage Rate', Value: `${facilityMetrics.penta1CoverageRate}%` },
+    { Indicator: 'Penta3 Coverage Rate', Value: `${facilityMetrics.penta3CoverageRate}%` },
+    { Indicator: 'Penta Dropout Rate', Value: `${facilityMetrics.pentaDropoutRate}%` },
+    { Indicator: 'RTS,S Malaria 3 Coverage (2026)', Value: `${facilityMetrics.malaria3CoverageRate || 0}%` },
+    { Indicator: 'HPV 1 Coverage (2026)', Value: `${facilityMetrics.hpv1CoverageRate || 0}%` },
+    { Indicator: 'IPV2 Coverage (2026)', Value: `${facilityMetrics.ipv2CoverageRate || 0}%` },
+    { Indicator: 'ANC1 Coverage Rate', Value: `${facilityMetrics.anc1CoverageRate}%` },
+    { Indicator: 'ANC4+ Coverage Rate', Value: `${facilityMetrics.anc4CoverageRate}%` },
+    { Indicator: 'ANC8+ Coverage Rate (2026)', Value: `${facilityMetrics.anc8CoverageRate || 0}%` },
+    { Indicator: 'Skilled Birth Delivery Rate', Value: `${facilityMetrics.skilledDeliveryRate}%` },
+    { Indicator: 'PNC Coverage Rate', Value: `${facilityMetrics.pncCoverageRate}%` },
+    { Indicator: 'IPT3 Coverage Rate', Value: `${facilityMetrics.ipt3CoverageRate}%` },
+    { Indicator: 'Teenage Pregnancy Rate', Value: `${facilityMetrics.teenagePregnancyRate}%` },
+    { Indicator: 'Growth Monitoring Coverage', Value: `${facilityMetrics.growthMonitoringRate}%` },
+    { Indicator: 'Exclusive Breastfeeding Rate', Value: `${facilityMetrics.ebfRate || 0}%` },
+    { Indicator: 'ORS + Zinc Diarrhoea Treatment Rate', Value: `${facilityMetrics.orsZincTreatmentRate || 0}%` },
+  ];
+
+  const rawMonthlyRows = facilityMonthlyRecords.map((rec) => ({
+    Year: rec.year,
+    Month: rec.monthLabel,
+    Status: rec.reportStatus,
+    'BCG Doses': rec.epi?.bcg || 0,
+    'Penta1 Doses': rec.epi?.penta1 || 0,
+    'Penta3 Doses': rec.epi?.penta3 || 0,
+    'MR1 Doses': rec.epi?.mr1 || 0,
+    'MR2 Doses': rec.epi?.mr2 || 0,
+    'IPV2 Doses': rec.epi?.ipv2 || 0,
+    'Malaria 3 Doses': rec.epi?.malaria3 || 0,
+    'HPV 1 Doses': rec.epi?.hpv1 || 0,
+    'FIC Children': rec.epi?.fullyImmunizedChild || 0,
+    'ANC 1 Registrations': rec.maternalHealth?.anc1 || 0,
+    'ANC 4 Visits': rec.maternalHealth?.anc4 || 0,
+    'ANC 8 Visits': rec.maternalHealth?.anc8 || 0,
+    'Skilled Deliveries': rec.maternalHealth?.skilledDeliveries || 0,
+    'PNC Visits': rec.maternalHealth?.postnatalCare || 0,
+    'IPT 3 Doses': rec.maternalHealth?.ipt3 || 0,
+    'Malaria Cases': rec.diseaseSurveillance?.malariaCases || 0,
+    'Diarrhoea Cases': rec.diseaseSurveillance?.diarrhoeaCases || 0,
+    'SAM Cases': rec.childHealth?.severeAcuteMalnutrition || 0,
+  }));
+
+  const workbook = XLSX.utils.book_new();
+  const summarySheet = XLSX.utils.json_to_sheet(summarySheetData);
+  const monthlySheet = XLSX.utils.json_to_sheet(rawMonthlyRows);
+
+  XLSX.utils.book_append_sheet(workbook, summarySheet, 'M&E Performance Summary');
+  XLSX.utils.book_append_sheet(workbook, monthlySheet, 'Monthly DHIMS2 Records');
+
+  const sanitizedFacName = facilityMetrics.facilityName.replace(/[^a-zA-Z0-9]/g, '_');
+  XLSX.writeFile(workbook, `${sanitizedFacName}_GHS_Report_2026.xlsx`);
+}

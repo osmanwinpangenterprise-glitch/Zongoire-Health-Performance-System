@@ -1,0 +1,22 @@
+{
+  "short_name": "GHS M&E 2026",
+  "name": "Ghana Health Service Zongoire M&E & Performance System 2026",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#006633",
+  "theme_color": "#006633",
+  "display": "standalone",
+  "orientation": "any",
+  "description": "GHS Bawku West Zongoire Sub-District Health Performance & DHIMS2 Validation System 2026"
+}

@@ -42,9 +42,17 @@ export interface EpiData {
   rota1: number;
   rota2: number;
   ipv: number;
+  ipv2: number; // 2026 IPV 2nd Dose
   mr1: number;
   mr2: number;
   yellowFever: number;
+  menA: number; // Meningitis A
+  malaria1: number; // 2026 RTS,S / R21 Malaria Vaccine Dose 1 (6 months)
+  malaria2: number; // 2026 RTS,S / R21 Malaria Vaccine Dose 2 (7 months)
+  malaria3: number; // 2026 RTS,S / R21 Malaria Vaccine Dose 3 (9 months)
+  malaria4: number; // 2026 RTS,S / R21 Malaria Vaccine Dose 4 (18-24 months)
+  hpv1: number; // 2026 HPV Dose 1 (Girls 9-14 yrs)
+  hpv2: number; // 2026 HPV Dose 2 (Girls 9-14 yrs)
   vitaminA: number;
   fullyImmunizedChild: number;
   tdTT: number;
@@ -116,6 +124,8 @@ export interface TbData {
   treatmentInitiated: number;
 }
 
+export type DataSource = 'sample' | 'actual';
+
 export interface FacilityMonthlyData {
   facilityId: FacilityID;
   facilityName: string;
@@ -124,6 +134,8 @@ export interface FacilityMonthlyData {
   monthLabel: string; // "Jan 2026", "Feb 2026", etc.
   reportStatus: 'Submitted' | 'Late' | 'Missing';
   submittedDate: string;
+  dataSource?: DataSource; // 'sample' (Baseline/Demo) | 'actual' (Imported/Entered)
+  isSample?: boolean; // Convenience flag: true if baseline/demo data, false if actual data
   
   epi: EpiData;
   diseaseSurveillance: DiseaseSurveillanceData;
@@ -136,19 +148,28 @@ export interface CalculatedFacilityMetrics {
   facilityId: FacilityID;
   facilityName: string;
   
-  // EPI Metrics
+  // EPI Metrics (Standard & 2026 Updated)
   penta1CoverageRate: number;
   penta3CoverageRate: number;
   mr1CoverageRate: number;
+  mr2CoverageRate: number;
   bcgCoverageRate: number;
   ficRate: number; // Fully Immunized Child Rate %
   pentaDropoutRate: number; // (Penta1 - Penta3) / Penta1 * 100
   mr1DropoutRate: number;    // (Penta1 - MR1) / Penta1 * 100
   pentaLeftOutRate: number; // (Target - Penta1) / Target * 100
   
-  // Maternal
+  // 2026 Ghana EPI Vaccines
+  malaria3CoverageRate: number; // RTS,S/R21 Malaria Vaccine 3rd Dose %
+  malaria4CoverageRate: number; // RTS,S/R21 Malaria Vaccine Booster (4th Dose) %
+  hpv1CoverageRate: number;     // HPV Dose 1 Coverage %
+  ipv2CoverageRate: number;     // IPV2 Dose Coverage %
+  zeroDoseChildrenCount: number; // Unvaccinated zero-dose children estimate
+  
+  // Maternal (Standard & 2026 Updated)
   anc1CoverageRate: number;
   anc4CoverageRate: number;
+  anc8CoverageRate: number; // 2026 WHO 8 Contact Model Coverage %
   ancRetentionRate: number; // (ANC4 / ANC1) * 100
   skilledDeliveryRate: number;
   pncCoverageRate: number;
@@ -156,18 +177,24 @@ export interface CalculatedFacilityMetrics {
   teenagePregnancyRate: number; // (Teenage Pregnancies / ANC1) * 100
   ancAnaemiaRegistrationRate: number; // (ANC Anaemia at Booking / ANC1) * 100
   
-  // Child
+  // Child Health & Nutrition (2026 Updated)
   growthMonitoringRate: number;
+  ebfRate: number; // Exclusive Breastfeeding @ 6 Months %
+  orsZincTreatmentRate: number; // Diarrhoea treated with ORS + Zinc %
+  samRecoveryRate: number; // SAM case recovery rate %
   
-  // Scores
+  // Scores & Ranking Credentials
   epiScore: number;
   maternalScore: number;
   diseaseScore: number;
   childScore: number;
   tbScore: number;
+  dataQualityScore: number; // Data Timeliness & Completeness Score
   overallScore: number;
   performanceLevel: 'Green' | 'Amber' | 'Red';
+  gradeLabel: 'Grade A+ Outstanding' | 'Grade A Excellent' | 'Grade B Satisfactory' | 'Grade C Needs Improvement' | 'Grade D Critical';
   rank: number;
+  credentialVerificationCode: string; // Official credential ID e.g. GHS-BW-ZSHPMS-2026-RANK-01
 }
 
 export interface AuditLog {

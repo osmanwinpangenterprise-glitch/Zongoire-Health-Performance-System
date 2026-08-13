@@ -22,7 +22,9 @@ interface Dhims2ImporterProps {
   auditLogs: AuditLog[];
   userRole: UserRole;
   onRestoreBaselineData: () => void;
+  onClearSampleData: () => void;
   onClearAllData: () => void;
+  dataStats?: { total: number; sample: number; actual: number };
   onNavigateTab?: (tab: string) => void;
 }
 
@@ -31,7 +33,9 @@ export const Dhims2Importer: React.FC<Dhims2ImporterProps> = ({
   auditLogs,
   userRole,
   onRestoreBaselineData,
+  onClearSampleData,
   onClearAllData,
+  dataStats,
   onNavigateTab,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -129,32 +133,56 @@ export const Dhims2Importer: React.FC<Dhims2ImporterProps> = ({
           <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
             <div className="flex items-center space-x-3 text-rose-600 dark:text-rose-400">
               <AlertCircle className="w-6 h-6" />
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Clear All Sample Data?</h3>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Clean Dataset Options</h3>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              This will wipe all 2025–2026 sample monthly facility records. You can then import your own official DHIMS2 Excel file or start entering raw data manually.
+              Differentiate and purge sample demo data so that your sub-district monitoring operates strictly on clean, actual DHIMS2 data.
             </p>
+            {dataStats && (
+              <div className="bg-slate-50 dark:bg-slate-800/60 p-3 rounded border border-slate-200 dark:border-slate-700 text-xs space-y-1">
+                <p className="font-bold text-slate-700 dark:text-slate-200">Current Dataset Breakdown:</p>
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-semibold">
+                  <span>Actual DHIMS2 Records:</span>
+                  <span>{dataStats.actual}</span>
+                </div>
+                <div className="flex justify-between text-amber-700 dark:text-amber-400 font-semibold">
+                  <span>Sample Baseline Records:</span>
+                  <span>{dataStats.sample}</span>
+                </div>
+              </div>
+            )}
             <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 p-3 rounded text-[11px] text-amber-800 dark:text-amber-300">
-              <strong>Tip:</strong> You can restore the original sample baseline data anytime by clicking <em>"Restore Baseline"</em>.
+              <strong>Tip:</strong> Clearing sample data keeps your actual uploaded files safe! You can also click <em>"Restore Baseline"</em> anytime if you need sample data again for testing.
             </div>
-            <div className="flex justify-end space-x-2 pt-2">
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={() => setShowClearConfirm(false)}
-                className="px-4 py-2 rounded text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="px-3 py-2 rounded text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={() => {
+                  onClearSampleData();
+                  setShowClearConfirm(false);
+                  setUploadSuccessMsg('Sample demo dataset purged cleanly! Only actual DHIMS2 imported or entered records remain.');
+                }}
+                className="px-3 py-2 rounded text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm"
+              >
+                Clear Sample Data Only
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   onClearAllData();
                   setShowClearConfirm(false);
-                  setUploadSuccessMsg('All sample dataset records cleared! You can now upload your official DHIMS2 Excel report or start clean.');
+                  setUploadSuccessMsg('All records cleared! You can now upload your official DHIMS2 Excel reports or enter new data.');
                 }}
-                className="px-4 py-2 rounded text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                className="px-3 py-2 rounded text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
               >
-                Yes, Clear All Data
+                Clear Everything
               </button>
             </div>
           </div>
