@@ -12,6 +12,7 @@
   "theme_color": "#006633",
   "lang": "en",
   "dir": "ltr",
+  "prefer_related_applications": false,
   "categories": ["health", "medical", "productivity"],
   "icons": [
     {
@@ -37,6 +38,22 @@
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "GHS M&E Executive Dashboard Desktop"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "GHS M&E Mobile Health Officer View"
     }
   ]
 }

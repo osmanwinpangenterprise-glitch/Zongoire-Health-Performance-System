@@ -1,19 +1,21 @@
-const CACHE_NAME = 'ghs-me-2026-v2';
+const CACHE_NAME = 'ghs-me-2026-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
   '/favicon.svg',
+  '/favicon.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-192x192.png',
-  '/pwa-maskable-512x512.png'
+  '/pwa-maskable-512x512.png',
+  '/screenshot-wide.png',
+  '/screenshot-mobile.png'
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Use allSettled or map to prevent one failed fetch from breaking SW installation
       return Promise.allSettled(
         urlsToCache.map((url) =>
           fetch(url, { cache: 'reload' })
