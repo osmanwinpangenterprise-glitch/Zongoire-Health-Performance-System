@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Edit3,
   Save,
@@ -15,6 +15,12 @@ import {
   BarChart3,
   ArrowRight,
   Info,
+  Check,
+  X,
+  Database,
+  TrendingUp,
+  ExternalLink,
+  Activity,
 } from 'lucide-react';
 import { Facility, FacilityMonthlyData, UserRole } from '../types';
 
@@ -52,6 +58,57 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
   const [activeFormSection, setActiveFormSection] = useState<'epi' | 'disease' | 'maternal' | 'child' | 'tb'>('epi');
 
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showFloatingToast, setShowFloatingToast] = useState(false);
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState<{
+    facilityName: string;
+    monthLabel: string;
+    timestamp: string;
+    epiCount: number;
+    surveillanceCount: number;
+    maternalCount: number;
+    childCount: number;
+    tbCount: number;
+  } | null>(null);
+
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const saveBtnTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synthesized web audio chime on save
+  const playSuccessChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Note 1: E5 (659.25Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(659.25, now);
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.25);
+
+      // Note 2: B5 (987.77Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(987.77, now + 0.12);
+      gain2.gain.setValueAtTime(0.15, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.45);
+    } catch (e) {
+      // Audio context might be restricted before user gesture
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState<FacilityMonthlyData>(() => createInitialForm(targetFacilityId, facilities, entryYear, entryMonth));
@@ -68,7 +125,17 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
       setFormData(createInitialForm(targetFacilityId, facilities, entryYear, entryMonth));
     }
     setSaveSuccessMsg(null);
+    setSaveStatus('idle');
+    setShowFloatingToast(false);
   }, [targetFacilityId, entryYear, entryMonth, monthlyData, facilities]);
+
+  // Clean up timers
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      if (saveBtnTimerRef.current) clearTimeout(saveBtnTimerRef.current);
+    };
+  }, []);
 
   // Helper to construct empty or fresh record
   function createInitialForm(facId: string, facList: Facility[], yr: number, mo: number): FacilityMonthlyData {
@@ -155,7 +222,9 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
         [field]: numVal,
       },
     }));
-    setSaveSuccessMsg(null);
+    if (saveStatus === 'saved') {
+      setSaveStatus('idle');
+    }
   };
 
   // Pre-fill realistic sample values for fast accurate data entry
@@ -290,14 +359,39 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
 
   const validationWarnings = getValidationWarnings();
 
+  // Calculate quick summary counts for snapshot confirmation
+  const getMetricsCountSummary = () => {
+    const epiValues = Object.values(formData.epi).filter((v) => typeof v === 'number' && v > 0);
+    const surveillanceValues = Object.values(formData.diseaseSurveillance).filter((v) => typeof v === 'number' && v > 0);
+    const maternalValues = Object.values(formData.maternalHealth).filter((v) => typeof v === 'number' && v > 0);
+    const childValues = Object.values(formData.childHealth).filter((v) => typeof v === 'number' && v > 0);
+    const tbValues = Object.values(formData.tb).filter((v) => typeof v === 'number' && v > 0);
+
+    const sumEpi = Object.values(formData.epi).reduce<number>((acc, v) => (typeof v === 'number' ? acc + v : acc), 0);
+    const sumSurveillance = Object.values(formData.diseaseSurveillance).reduce<number>((acc, v) => (typeof v === 'number' ? acc + v : acc), 0);
+    const sumMaternal = Object.values(formData.maternalHealth).reduce<number>((acc, v) => (typeof v === 'number' ? acc + v : acc), 0);
+
+    return {
+      epiCount: sumEpi,
+      surveillanceCount: sumSurveillance,
+      maternalCount: sumMaternal,
+      childCount: childValues.length,
+      tbCount: tbValues.length,
+      fieldsWithData: epiValues.length + surveillanceValues.length + maternalValues.length + childValues.length + tbValues.length,
+    };
+  };
+
   // Save submit handler
-  const handleSaveSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    setSaveStatus('saving');
 
     const selectedFacilityObj = facilities.find((f) => f.id === targetFacilityId);
     const finalFacilityName = selectedFacilityObj ? selectedFacilityObj.name : formData.facilityName;
     const monthName = MONTH_NAMES[(entryMonth - 1) % 12];
     const monthLabel = `${monthName.substring(0, 3)} ${entryYear}`;
+    const timestampStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     const recordToCommit: FacilityMonthlyData = {
       ...formData,
@@ -312,16 +406,140 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
       isSample: false,
     };
 
-    onSaveRecord(recordToCommit);
-    setSaveSuccessMsg(
-      `Official monthly report for ${finalFacilityName} (${monthLabel}) saved to database! Dashboard analytics, indicator calculations, and performance scores have been updated.`
-    );
+    setTimeout(() => {
+      onSaveRecord(recordToCommit);
+      playSuccessChime();
+
+      const counts = getMetricsCountSummary();
+      setLastSavedSnapshot({
+        facilityName: finalFacilityName,
+        monthLabel,
+        timestamp: timestampStr,
+        epiCount: counts.epiCount,
+        surveillanceCount: counts.surveillanceCount,
+        maternalCount: counts.maternalCount,
+        childCount: counts.childCount,
+        tbCount: counts.tbCount,
+      });
+
+      setSaveSuccessMsg(
+        `Official monthly report for ${finalFacilityName} (${monthLabel}) committed to database! Dashboard analytics, indicator calculations, and performance scores have been refreshed.`
+      );
+      setSaveStatus('saved');
+      setShowFloatingToast(true);
+
+      // Auto-hide floating toast after 8 seconds
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
+        setShowFloatingToast(false);
+      }, 8000);
+
+      // Reset save button status after 6 seconds
+      if (saveBtnTimerRef.current) clearTimeout(saveBtnTimerRef.current);
+      saveBtnTimerRef.current = setTimeout(() => {
+        setSaveStatus('idle');
+      }, 6000);
+    }, 280);
   };
 
   const currentFacilityObj = facilities.find((f) => f.id === targetFacilityId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Floating Save Confirmation Toast in Viewport */}
+      {showFloatingToast && lastSavedSnapshot && (
+        <div
+          id="floating-save-toast"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 max-w-md w-[92vw] sm:w-[420px] bg-white dark:bg-neutral-900 border-2 border-emerald-500 dark:border-emerald-500 rounded-2xl shadow-2xl p-4.5 text-neutral-900 dark:text-white transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start space-x-3">
+              <div className="relative mt-0.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/90 text-emerald-700 dark:text-emerald-300 flex items-center justify-center border border-emerald-300 dark:border-emerald-700 shadow-xs">
+                  <Check className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wide border border-emerald-300 dark:border-emerald-800">
+                    DHIMS2 Committed
+                  </span>
+                  <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
+                    {lastSavedSnapshot.timestamp}
+                  </span>
+                </div>
+                <h4 className="font-bold text-sm text-neutral-900 dark:text-white">
+                  Data Saved Successfully!
+                </h4>
+                <p className="text-xs text-neutral-600 dark:text-neutral-300">
+                  <strong className="text-emerald-700 dark:text-emerald-400">{lastSavedSnapshot.facilityName}</strong> • {lastSavedSnapshot.monthLabel}
+                </p>
+              </div>
+            </div>
+
+            <button
+              id="close-save-toast-btn"
+              type="button"
+              onClick={() => setShowFloatingToast(false)}
+              className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+              title="Dismiss notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Quick Metrics Summary Chips */}
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-[11px]">
+            <div className="bg-emerald-50/80 dark:bg-emerald-950/40 p-2 rounded-lg border border-emerald-200/60 dark:border-emerald-900/60">
+              <span className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 block">EPI Doses</span>
+              <strong className="text-xs text-emerald-700 dark:text-emerald-300 font-bold">{lastSavedSnapshot.epiCount.toLocaleString()}</strong>
+            </div>
+            <div className="bg-amber-50/80 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200/60 dark:border-amber-900/60">
+              <span className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 block">Surveillance</span>
+              <strong className="text-xs text-amber-700 dark:text-amber-300 font-bold">{lastSavedSnapshot.surveillanceCount.toLocaleString()}</strong>
+            </div>
+            <div className="bg-blue-50/80 dark:bg-blue-950/40 p-2 rounded-lg border border-blue-200/60 dark:border-blue-900/60">
+              <span className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 block">Maternal ANC</span>
+              <strong className="text-xs text-blue-700 dark:text-blue-300 font-bold">{lastSavedSnapshot.maternalCount.toLocaleString()}</strong>
+            </div>
+          </div>
+
+          {/* Direct Navigation Links */}
+          {onNavigateTab && (
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-neutral-100 dark:border-neutral-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFloatingToast(false);
+                  onNavigateTab('dashboard');
+                }}
+                className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all shadow-xs cursor-pointer"
+              >
+                <Activity className="w-3.5 h-3.5 text-amber-300" />
+                <span>Executive Dashboard</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFloatingToast(false);
+                  onNavigateTab('epi');
+                }}
+                className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 font-bold py-1.5 px-2.5 rounded-lg text-xs transition-colors cursor-pointer"
+              >
+                <span>EPI Analysis</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
@@ -342,8 +560,41 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
           </p>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls including Quick Save */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Save Header Button */}
+          <button
+            id="top-quick-save-btn"
+            type="button"
+            onClick={() => handleSaveSubmit()}
+            disabled={saveStatus === 'saving'}
+            className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition-all shadow-sm cursor-pointer ${
+              saveStatus === 'saved'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400/60'
+                : saveStatus === 'saving'
+                ? 'bg-emerald-700 text-white opacity-80 cursor-wait'
+                : 'bg-emerald-800 hover:bg-emerald-900 text-white'
+            }`}
+            title="Save and commit this month's data to system"
+          >
+            {saveStatus === 'saving' ? (
+              <>
+                <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : saveStatus === 'saved' ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>Saved to Database!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-3.5 h-3.5 text-amber-300" />
+                <span>Save Record</span>
+              </>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={handlePrefillSample}
@@ -356,7 +607,11 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
 
           <button
             type="button"
-            onClick={() => setFormData(createInitialForm(targetFacilityId, facilities, entryYear, entryMonth))}
+            onClick={() => {
+              setFormData(createInitialForm(targetFacilityId, facilities, entryYear, entryMonth));
+              setSaveStatus('idle');
+              setSaveSuccessMsg(null);
+            }}
             className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 border border-neutral-300 dark:border-neutral-700 px-3 py-2 rounded-lg text-xs font-bold flex items-center space-x-1 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -774,23 +1029,105 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
           </div>
         )}
 
+        {/* In-Page Bottom Confirmation Card */}
+        {saveSuccessMsg && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/80 border-2 border-emerald-500 dark:border-emerald-600 p-5 rounded-2xl text-xs text-emerald-900 dark:text-emerald-100 space-y-3 shadow-md animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start space-x-3">
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+                  <Check className="w-4 h-4 stroke-[3]" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wide">
+                      Verified & Saved
+                    </span>
+                    {lastSavedSnapshot && (
+                      <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
+                        Committed at {lastSavedSnapshot.timestamp}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-sm text-emerald-950 dark:text-white">
+                    Facility Monthly Data Successfully Saved!
+                  </h4>
+                  <p className="text-emerald-800 dark:text-emerald-200 leading-relaxed">
+                    {saveSuccessMsg}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {onNavigateTab && (
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-emerald-200 dark:border-emerald-800/80">
+                <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mr-1">
+                  Next Steps:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('dashboard')}
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center space-x-1.5 shadow-xs"
+                >
+                  <Activity className="w-3.5 h-3.5 text-amber-300" />
+                  <span>View Executive Dashboard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('comparison')}
+                  className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+                >
+                  <span>Facility Rankings</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab('epi')}
+                  className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+                >
+                  <span>EPI Analysis</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Submit Button Bar */}
-        <div className="bg-neutral-50 dark:bg-neutral-800/60 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+        <div className="bg-neutral-50 dark:bg-neutral-800/60 p-4 rounded-xl border border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center justify-between gap-3 sticky bottom-4 shadow-lg backdrop-blur-sm bg-opacity-95 dark:bg-opacity-95">
           <div className="text-xs text-neutral-600 dark:text-neutral-400 flex items-center space-x-2">
             <Info className="w-4 h-4 text-emerald-600 flex-shrink-0" />
             <span>
-              Saving will update <strong>{formData.facilityName}</strong> record for{' '}
-              <strong>{MONTH_NAMES[(entryMonth - 1) % 12]} {entryYear}</strong>.
+              Saving will commit <strong>{formData.facilityName}</strong> record for{' '}
+              <strong>{MONTH_NAMES[(entryMonth - 1) % 12]} {entryYear}</strong> into live indicators.
             </span>
           </div>
 
           <button
             id="submit-data-entry-btn"
             type="submit"
-            className="bg-emerald-800 hover:bg-emerald-900 text-white px-6 py-2.5 rounded-lg text-xs font-bold shadow-md flex items-center space-x-2 transition-all cursor-pointer"
+            disabled={saveStatus === 'saving'}
+            className={`px-6 py-2.5 rounded-lg text-xs font-bold shadow-md flex items-center space-x-2 transition-all cursor-pointer ${
+              saveStatus === 'saved'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400 ring-offset-2 dark:ring-offset-neutral-900'
+                : saveStatus === 'saving'
+                ? 'bg-emerald-700 text-white opacity-80 cursor-wait'
+                : 'bg-emerald-800 hover:bg-emerald-900 text-white'
+            }`}
           >
-            <Save className="w-4 h-4 text-amber-300" />
-            <span>Save & Commit Monthly Data</span>
+            {saveStatus === 'saving' ? (
+              <>
+                <RotateCcw className="w-4 h-4 animate-spin text-amber-300" />
+                <span>Saving & Committing to Database...</span>
+              </>
+            ) : saveStatus === 'saved' ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>✓ Monthly Data Saved to Database!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 text-amber-300" />
+                <span>Save & Commit Monthly Data</span>
+              </>
+            )}
           </button>
         </div>
       </form>

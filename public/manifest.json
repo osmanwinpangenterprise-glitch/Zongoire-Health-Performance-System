@@ -1,22 +1,42 @@
 {
+  "id": "/",
+  "name": "Ghana Health Service Zongoire M&E System 2026",
   "short_name": "GHS M&E 2026",
-  "name": "Ghana Health Service Zongoire M&E & Performance System 2026",
-  "icons": [
-    {
-      "src": "pwa-192x192.png",
-      "type": "image/png",
-      "sizes": "192x192"
-    },
-    {
-      "src": "pwa-512x512.png",
-      "type": "image/png",
-      "sizes": "512x512"
-    }
-  ],
+  "description": "GHS Bawku West Zongoire Sub-District Health Performance Validation & DHIMS2 M&E System 2026",
   "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#006633",
   "theme_color": "#006633",
-  "display": "standalone",
-  "orientation": "any",
-  "description": "GHS Bawku West Zongoire Sub-District Health Performance & DHIMS2 Validation System 2026"
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["health", "medical", "productivity"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ]
 }

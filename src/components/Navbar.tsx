@@ -20,6 +20,7 @@ import {
   Database,
 } from 'lucide-react';
 import { UserRole } from '../types';
+import { PwaInstallModal } from './PwaInstallModal';
 
 export type DataSourceFilter = 'all' | 'actual' | 'sample';
 
@@ -62,6 +63,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -70,24 +72,18 @@ export const Navbar: React.FC<NavbarProps> = ({
     };
     window.addEventListener('beforeinstallprompt', handler);
 
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    if (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    ) {
       setIsInstalled(true);
     }
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-      }
-      setDeferredPrompt(null);
-    } else {
-      alert('To install this app on your device:\n\n• On Chrome/Edge: Click the install icon in the address bar.\n• On iOS Safari: Tap "Share" and select "Add to Home Screen".');
-    }
+  const handleInstallClick = () => {
+    setIsInstallModalOpen(true);
   };
 
   const months = [
@@ -312,6 +308,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           })}
         </div>
       </nav>
+
+      {/* PWA Install Guidance & Trigger Modal */}
+      <PwaInstallModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+        deferredPrompt={deferredPrompt}
+        onInstallAccepted={() => setIsInstalled(true)}
+      />
     </header>
   );
 };

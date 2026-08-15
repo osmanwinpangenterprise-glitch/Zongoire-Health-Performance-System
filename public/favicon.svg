@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="128" fill="#006633" />
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#FFD700" stroke-width="16" />
+  <!-- Medical Cross -->
+  <path d="M220 120 h72 v100 h100 v72 h-100 v100 h-72 v-100 h-100 v-72 h100 z" fill="#FFFFFF" />
+  <!-- Center Ghana Red Star -->
+  <polygon points="256,224 266,248 292,248 271,263 279,288 256,272 233,288 241,263 220,248 246,248" fill="#CC0000" />
+</svg>
