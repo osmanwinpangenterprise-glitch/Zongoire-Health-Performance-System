@@ -3,35 +3,92 @@ import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
 
 /**
- * Captures an HTML element by ID and downloads it as a PNG image
+ * Captures an HTML element by ID and downloads it as a high-resolution PNG image
  */
-export async function exportElementToPng(elementId: string, filename = 'chart-export.png') {
+export async function exportElementToPng(
+  elementId: string,
+  filename = 'ghs-health-chart.png',
+  options: { backgroundColor?: string; scale?: number } = {}
+): Promise<boolean> {
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with id '${elementId}' not found for PNG export.`);
-    return;
+    // Fallback: try capturing the main content area or container
+    const mainArea = document.querySelector('main') || document.body;
+    if (mainArea && elementId === 'main-dashboard-content') {
+      return captureAndDownloadPng(mainArea as HTMLElement, filename, options);
+    }
+    return false;
   }
 
+  return captureAndDownloadPng(element, filename, options);
+}
+
+/**
+ * Direct capture of any HTMLElement to PNG
+ */
+export async function captureAndDownloadPng(
+  element: HTMLElement,
+  filename = 'ghs-report.png',
+  options: { backgroundColor?: string; scale?: number } = {}
+): Promise<boolean> {
   try {
+    const isDark = document.documentElement.classList.contains('dark');
+    const defaultBg = isDark ? '#0f172a' : '#ffffff';
+    const bg = options.backgroundColor || defaultBg;
+
+    // Temporarily ensure element is visible for capture
+    const originalOverflow = element.style.overflow;
+    element.style.overflow = 'visible';
+
     const canvas = await html2canvas(element, {
-      scale: 2, // High resolution
+      scale: options.scale || 2, // High DPI for crisp printing and presentations
       useCORS: true,
-      backgroundColor: '#ffffff',
+      allowTaint: true,
+      backgroundColor: bg,
+      logging: false,
+      onclone: (clonedDoc) => {
+        // Ensure cloned styles and dark mode classes match
+        const clonedHtml = clonedDoc.documentElement;
+        if (isDark) {
+          clonedHtml.classList.add('dark');
+        } else {
+          clonedHtml.classList.remove('dark');
+        }
+
+        // Ensure SVGs have proper bounding boxes in clone
+        const svgs = clonedDoc.querySelectorAll('svg');
+        svgs.forEach((svg) => {
+          if (!svg.getAttribute('xmlns')) {
+            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          }
+        });
+      },
     });
+
+    element.style.overflow = originalOverflow;
+
     const imgData = canvas.toDataURL('image/png');
+    const safeFilename = filename.endsWith('.png') ? filename : `${filename}.png`;
+
     const link = document.createElement('a');
     link.href = imgData;
-    link.download = filename.endsWith('.png') ? filename : `${filename}.png`;
+    link.download = safeFilename;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+
+    return true;
   } catch (error) {
     console.error('Failed to export PNG:', error);
+    return false;
   }
 }
 
 /**
  * Captures an HTML element by ID and compiles it into a downloadable PDF document
  */
-export async function exportElementToPdf(elementId: string, title: string, filename = 'zongoirie-health-report.pdf') {
+export async function exportElementToPdf(elementId: string, title = 'GHS Health Report', filename = 'zongoire-health-report.pdf') {
   const element = document.getElementById(elementId);
   if (!element) {
     console.error(`Element with id '${elementId}' not found for PDF export.`);
@@ -39,10 +96,12 @@ export async function exportElementToPdf(elementId: string, title: string, filen
   }
 
   try {
+    const isDark = document.documentElement.classList.contains('dark');
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
-      backgroundColor: '#ffffff',
+      backgroundColor: isDark ? '#0f172a' : '#ffffff',
+      logging: false,
     });
 
     const imgData = canvas.toDataURL('image/png');

@@ -65,17 +65,33 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
 
   // Compute overall sub-district metrics
   const totalFacilities = facilities.length;
-  const reportingCompleteness = 100; // All 4 facilities submitted
-  const overallAvgScore = Math.round(
-    metrics.reduce((acc, curr) => acc + curr.overallScore, 0) / (metrics.length || 1)
+  const facilitiesWithData = metrics.filter((m) => m.hasData);
+  const submittedFacilitiesCount = facilitiesWithData.length;
+  const reportingCompleteness = Math.round(
+    (submittedFacilitiesCount / (totalFacilities || 1)) * 100
   );
 
+  const overallAvgScore =
+    facilitiesWithData.length > 0
+      ? Math.round(
+          facilitiesWithData.reduce((acc, curr) => acc + curr.overallScore, 0) /
+            facilitiesWithData.length
+        )
+      : 0;
+
   const sortedByScore = [...metrics]
-    .sort((a, b) => b.overallScore - a.overallScore)
+    .sort((a, b) => {
+      if (a.hasData && !b.hasData) return -1;
+      if (!a.hasData && b.hasData) return 1;
+      return b.overallScore - a.overallScore;
+    })
     .map((m, idx) => ({ ...m, rank: idx + 1 }));
 
-  const bestFacility = sortedByScore[0];
-  const lowestFacility = sortedByScore[sortedByScore.length - 1];
+  const bestFacility = facilitiesWithData.length > 0 ? sortedByScore[0] : null;
+  const lowestFacility =
+    facilitiesWithData.length > 0
+      ? sortedByScore[facilitiesWithData.length - 1]
+      : null;
 
   const handleCopyCode = (code: string) => {
     navigator.clipboard.writeText(code);
@@ -233,10 +249,26 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             Reporting Completeness
           </p>
           <div className="flex items-end gap-2 mt-1">
-            <p className="text-2xl font-bold text-[#006633] dark:text-emerald-400">100%</p>
-            <span className="text-[10px] text-green-600 dark:text-emerald-400 font-bold mb-1">▲ Optimal (4/4)</span>
+            <p className="text-2xl font-bold text-[#006633] dark:text-emerald-400">{reportingCompleteness}%</p>
+            <span
+              className={`text-[10px] font-bold mb-1 ${
+                reportingCompleteness === 100
+                  ? 'text-green-600 dark:text-emerald-400'
+                  : reportingCompleteness > 0
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-500'
+              }`}
+            >
+              {reportingCompleteness === 100
+                ? `▲ Complete (${submittedFacilitiesCount}/${totalFacilities})`
+                : reportingCompleteness > 0
+                ? `● Partial (${submittedFacilitiesCount}/${totalFacilities})`
+                : `▼ Awaiting Data (0/${totalFacilities})`}
+            </span>
           </div>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">All facilities submitted for {periodLabel}</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+            {submittedFacilitiesCount} of {totalFacilities} facilities submitted for {periodLabel}
+          </p>
         </div>
 
         {/* KPI 2: Overall Sub-District Score */}
@@ -245,10 +277,34 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
             Performance Score
           </p>
           <div className="flex items-end gap-2 mt-1">
-            <p className="text-2xl font-bold text-slate-800 dark:text-white">{overallAvgScore}%</p>
-            <span className="text-[10px] text-green-600 dark:text-emerald-400 font-bold mb-1">+2.4% vs prev</span>
+            <p className="text-2xl font-bold text-slate-800 dark:text-white">
+              {submittedFacilitiesCount > 0 ? `${overallAvgScore}%` : '0%'}
+            </p>
+            <span
+              className={`text-[10px] font-bold mb-1 ${
+                submittedFacilitiesCount === 0
+                  ? 'text-slate-400'
+                  : overallAvgScore >= 80
+                  ? 'text-green-600 dark:text-emerald-400'
+                  : overallAvgScore >= 70
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-500'
+              }`}
+            >
+              {submittedFacilitiesCount > 0
+                ? overallAvgScore >= 80
+                  ? 'Grade A'
+                  : overallAvgScore >= 70
+                  ? 'Grade B'
+                  : 'Grade C/D'
+                : 'Pending Submissions'}
+            </span>
           </div>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Weighted sub-district average</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+            {submittedFacilitiesCount > 0
+              ? 'Weighted average of submitted returns'
+              : 'Awaiting DHIMS2 monthly records'}
+          </p>
         </div>
 
         {/* KPI 3: Top Facility (Gold Border) */}
@@ -256,8 +312,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Top Facility
           </p>
-          <p className="text-base font-bold text-slate-800 dark:text-white truncate mt-1">{bestFacility?.facilityName}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400">Score: {bestFacility?.overallScore}% • Rank #1</p>
+          <p className="text-base font-bold text-slate-800 dark:text-white truncate mt-1">
+            {bestFacility ? bestFacility.facilityName : 'Awaiting Submissions'}
+          </p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            {bestFacility
+              ? `Score: ${bestFacility.overallScore}% • Rank #1`
+              : 'No return forms submitted yet'}
+          </p>
         </div>
 
         {/* KPI 4: Lowest Facility (Red Border) */}
@@ -265,8 +327,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
           <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Lowest Facility
           </p>
-          <p className="text-base font-bold text-slate-800 dark:text-white truncate mt-1">{lowestFacility?.facilityName}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400">Score: {lowestFacility?.overallScore}% • Priority Follow-up</p>
+          <p className="text-base font-bold text-slate-800 dark:text-white truncate mt-1">
+            {lowestFacility ? lowestFacility.facilityName : 'Awaiting Submissions'}
+          </p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400">
+            {lowestFacility
+              ? `Score: ${lowestFacility.overallScore}% • Priority Follow-up`
+              : 'No return forms submitted yet'}
+          </p>
         </div>
       </div>
 
@@ -311,17 +379,22 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     const isCopied = copiedCode === code;
                     const facRecords = monthlyData.filter((d) => d.facilityId === f.facilityId);
                     const isActual = facRecords.some((d) => d.isSample === false || d.dataSource === 'actual');
+                    const hasFacilityData = f.hasData;
 
                     return (
                       <tr key={f.facilityId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
                         <td className="px-3 py-2 text-center font-extrabold text-amber-600 dark:text-amber-400">
-                          #{f.rank}
+                          {hasFacilityData ? `#${f.rank}` : '-'}
                         </td>
                         <td className="px-3 py-2 font-bold text-slate-800 dark:text-white">
                           {f.facilityName}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          {isActual ? (
+                          {!hasFacilityData ? (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                              PENDING
+                            </span>
+                          ) : isActual ? (
                             <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                               ACTUAL
                             </span>
@@ -331,20 +404,24 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                             </span>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-center font-medium">{f.penta3CoverageRate}%</td>
+                        <td className="px-3 py-2 text-center font-medium">{hasFacilityData ? `${f.penta3CoverageRate}%` : '-'}</td>
                         <td className="px-3 py-2 text-center font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20">
-                          {f.malaria3CoverageRate || 0}%
+                          {hasFacilityData ? `${f.malaria3CoverageRate || 0}%` : '-'}
                         </td>
                         <td className="px-3 py-2 text-center font-semibold text-purple-700 dark:text-purple-400 bg-purple-50/50 dark:bg-purple-950/20">
-                          {f.hpv1CoverageRate || 0}%
+                          {hasFacilityData ? `${f.hpv1CoverageRate || 0}%` : '-'}
                         </td>
-                        <td className="px-3 py-2 text-center font-medium">{f.anc8CoverageRate || 0}%</td>
-                        <td className="px-3 py-2 text-center font-medium">{f.skilledDeliveryRate}%</td>
-                        <td className="px-3 py-2 text-center font-extrabold text-[#006633] dark:text-emerald-400 text-sm">{f.overallScore}%</td>
+                        <td className="px-3 py-2 text-center font-medium">{hasFacilityData ? `${f.anc8CoverageRate || 0}%` : '-'}</td>
+                        <td className="px-3 py-2 text-center font-medium">{hasFacilityData ? `${f.skilledDeliveryRate}%` : '-'}</td>
+                        <td className="px-3 py-2 text-center font-extrabold text-[#006633] dark:text-emerald-400 text-sm">
+                          {hasFacilityData ? `${f.overallScore}%` : '0%'}
+                        </td>
                         <td className="px-3 py-2 text-center">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              f.overallScore >= 90
+                              !hasFacilityData
+                                ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300'
+                                : f.overallScore >= 90
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300'
                                 : f.overallScore >= 80
                                 ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300'
@@ -353,7 +430,7 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                                 : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                             }`}
                           >
-                            {f.gradeLabel || (f.overallScore >= 80 ? 'Grade A' : 'Grade B')}
+                            {!hasFacilityData ? 'Pending' : f.gradeLabel || (f.overallScore >= 80 ? 'Grade A' : 'Grade B')}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-center font-mono text-[10px]">
@@ -370,9 +447,10 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                         <td className="px-3 py-2 text-center">
                           <button
                             type="button"
+                            disabled={!hasFacilityData}
                             onClick={() => handleExportSingleFacility(f)}
                             title={`Export detailed GHS M&E Excel report for ${f.facilityName}`}
-                            className="bg-[#006633] hover:bg-green-800 text-white p-1.5 rounded transition-all cursor-pointer inline-flex items-center justify-center space-x-1 text-[10px] font-bold"
+                            className="bg-[#006633] hover:bg-green-800 text-white p-1.5 rounded transition-all cursor-pointer inline-flex items-center justify-center space-x-1 text-[10px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             <Download className="w-3 h-3" />
                             <span className="hidden sm:inline">REPORT</span>

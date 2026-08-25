@@ -32,15 +32,19 @@ export const FacilityComparison: React.FC<FacilityComparisonProps> = ({
   facilities,
   periodLabel,
 }) => {
-  const sortedMetrics = [...metrics].sort((a, b) => b.overallScore - a.overallScore);
+  const sortedMetrics = [...metrics].sort((a, b) => {
+    if (a.hasData && !b.hasData) return -1;
+    if (!a.hasData && b.hasData) return 1;
+    return b.overallScore - a.overallScore;
+  });
 
   const comparisonChartData = sortedMetrics.map((m) => ({
     facility: m.facilityName.replace(' Zongoire', '').replace(' CHPS', ' CHPS').replace(' Health Centre', ' HC'),
-    'Overall Performance': m.overallScore,
-    'EPI Score': m.epiScore,
-    'Maternal Score': m.maternalScore,
-    'Child Score': m.childScore,
-    'Disease Control Score': m.diseaseScore,
+    'Overall Performance': m.hasData ? m.overallScore : 0,
+    'EPI Score': m.hasData ? m.epiScore : 0,
+    'Maternal Score': m.hasData ? m.maternalScore : 0,
+    'Child Score': m.hasData ? m.childScore : 0,
+    'Disease Control Score': m.hasData ? m.diseaseScore : 0,
   }));
 
   return (
@@ -75,7 +79,7 @@ export const FacilityComparison: React.FC<FacilityComparisonProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         {sortedMetrics.map((f, idx) => {
           const facInfo = facilities.find((facility) => facility.id === f.facilityId);
-          const isWinner = idx === 0;
+          const isWinner = idx === 0 && f.hasData;
 
           return (
             <div
@@ -89,12 +93,14 @@ export const FacilityComparison: React.FC<FacilityComparisonProps> = ({
               <div className="flex items-center justify-between mb-1.5">
                 <span
                   className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
-                    isWinner
+                    !f.hasData
+                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                      : isWinner
                       ? 'bg-[#FFD700] text-slate-950 font-bold'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
                   }`}
                 >
-                  Rank #{idx + 1}
+                  {f.hasData ? `Rank #${idx + 1}` : 'Pending Submission'}
                 </span>
                 {isWinner && <Award className="w-4 h-4 text-[#FFD700]" />}
               </div>
@@ -108,7 +114,7 @@ export const FacilityComparison: React.FC<FacilityComparisonProps> = ({
                 <span className={`text-[10px] font-semibold ${isWinner ? 'text-green-100' : 'text-slate-500'}`}>
                   Overall Score:
                 </span>
-                <span className="text-lg font-bold">{f.overallScore}%</span>
+                <span className="text-lg font-bold">{f.hasData ? `${f.overallScore}%` : '0%'}</span>
               </div>
             </div>
           );
@@ -165,36 +171,42 @@ export const FacilityComparison: React.FC<FacilityComparisonProps> = ({
               {sortedMetrics.map((f, idx) => (
                 <tr key={f.facilityId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
                   <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-white">
-                    #{idx + 1}
+                    {f.hasData ? `#${idx + 1}` : '-'}
                   </td>
                   <td className="py-2.5 px-3 font-bold text-slate-800 dark:text-white">
                     {f.facilityName}
                   </td>
                   <td className="py-2.5 px-3 text-center font-semibold text-sky-700 dark:text-sky-400">
-                    {f.epiScore}%
+                    {f.hasData ? `${f.epiScore}%` : '-'}
                   </td>
                   <td className="py-2.5 px-3 text-center font-semibold text-amber-700 dark:text-amber-400">
-                    {f.maternalScore}%
+                    {f.hasData ? `${f.maternalScore}%` : '-'}
                   </td>
                   <td className="py-2.5 px-3 text-center font-semibold text-[#006633] dark:text-emerald-400">
-                    {f.childScore}%
+                    {f.hasData ? `${f.childScore}%` : '-'}
                   </td>
-                  <td className="py-2.5 px-3 text-center font-semibold">{f.diseaseScore}%</td>
-                  <td className="py-2.5 px-3 text-center font-semibold">{f.tbScore}%</td>
+                  <td className="py-2.5 px-3 text-center font-semibold">
+                    {f.hasData ? `${f.diseaseScore}%` : '-'}
+                  </td>
+                  <td className="py-2.5 px-3 text-center font-semibold">
+                    {f.hasData ? `${f.tbScore}%` : '-'}
+                  </td>
                   <td className="py-2.5 px-3 text-center font-bold text-slate-800 dark:text-white text-sm">
-                    {f.overallScore}%
+                    {f.hasData ? `${f.overallScore}%` : '0%'}
                   </td>
                   <td className="py-2.5 px-3 text-center">
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        f.performanceLevel === 'Green'
+                        !f.hasData
+                          ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          : f.performanceLevel === 'Green'
                           ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
                           : f.performanceLevel === 'Amber'
                           ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                           : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
                       }`}
                     >
-                      {f.performanceLevel} ({f.overallScore}%)
+                      {!f.hasData ? 'Pending' : `${f.performanceLevel} (${f.overallScore}%)`}
                     </span>
                   </td>
                 </tr>

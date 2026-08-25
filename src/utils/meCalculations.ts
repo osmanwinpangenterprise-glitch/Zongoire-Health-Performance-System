@@ -17,11 +17,85 @@ export function getMonthlyTarget(annualTarget: number, numMonths = 1): number {
  */
 export function calculateFacilityMetrics(
   facility: Facility,
-  filteredMonthlyData: FacilityMonthlyData[]
+  filteredMonthlyData: FacilityMonthlyData[],
+  expectedMonths = 1
 ): CalculatedFacilityMetrics {
   // Filter for this specific facility
   const facDataList = filteredMonthlyData.filter((d) => d.facilityId === facility.id);
+  const hasData = facDataList.length > 0;
   const numMonths = Math.max(1, facDataList.length);
+  const targetMonths = Math.max(1, expectedMonths);
+
+  const targetPop = facility.targetPopulation;
+
+  // Adjusted denominators based on expected reporting period
+  const periodUnder1Target = getMonthlyTarget(targetPop.childrenUnder1, targetMonths);
+  const periodUnder5Target = getMonthlyTarget(targetPop.childrenUnder5, targetMonths);
+  const periodDeliveriesTarget = getMonthlyTarget(targetPop.expectedDeliveries, targetMonths);
+  const periodPregnanciesTarget = getMonthlyTarget(targetPop.expectedPregnancies, targetMonths);
+  const wraTarget = getMonthlyTarget(targetPop.womenOfReproductiveAge, targetMonths);
+  const adolescentGirlsTarget = Math.round(wraTarget * 0.15); // Target for HPV vaccine (9-14 yrs)
+
+  // Facility Code
+  const facCodeMap: Record<string, string> = {
+    zongoire_hc: 'ZHC-01',
+    zongoire_chps: 'ZCH-02',
+    apodabogo_chps: 'ACH-03',
+    dagunga_chps: 'DCH-04',
+  };
+  const codeSuffix = facCodeMap[facility.id] || 'FAC-00';
+  const credentialVerificationCode = `GHS-BW-ZSHPMS-2026-${codeSuffix}`;
+
+  // If no data submitted/uploaded yet for this facility, return clean baseline zero state
+  if (!hasData) {
+    return {
+      facilityId: facility.id,
+      facilityName: facility.name,
+      hasData: false,
+      submittedReportsCount: 0,
+      expectedReportsCount: targetMonths,
+      reportingCompletenessRate: 0,
+      latestSubmissionDate: undefined,
+      penta1CoverageRate: 0,
+      penta3CoverageRate: 0,
+      mr1CoverageRate: 0,
+      mr2CoverageRate: 0,
+      bcgCoverageRate: 0,
+      ficRate: 0,
+      pentaDropoutRate: 0,
+      mr1DropoutRate: 0,
+      pentaLeftOutRate: 100,
+      malaria3CoverageRate: 0,
+      malaria4CoverageRate: 0,
+      hpv1CoverageRate: 0,
+      ipv2CoverageRate: 0,
+      zeroDoseChildrenCount: Math.round(periodUnder1Target),
+      anc1CoverageRate: 0,
+      anc4CoverageRate: 0,
+      anc8CoverageRate: 0,
+      ancRetentionRate: 0,
+      skilledDeliveryRate: 0,
+      pncCoverageRate: 0,
+      ipt3CoverageRate: 0,
+      teenagePregnancyRate: 0,
+      ancAnaemiaRegistrationRate: 0,
+      growthMonitoringRate: 0,
+      ebfRate: 0,
+      orsZincTreatmentRate: 0,
+      samRecoveryRate: 0,
+      epiScore: 0,
+      maternalScore: 0,
+      diseaseScore: 0,
+      childScore: 0,
+      tbScore: 0,
+      dataQualityScore: 0,
+      overallScore: 0,
+      performanceLevel: 'Red',
+      gradeLabel: 'Grade D Critical',
+      rank: 1,
+      credentialVerificationCode,
+    };
+  }
 
   // Aggregate stats across all matched months for this facility
   const aggregated = facDataList.reduce(
@@ -110,15 +184,9 @@ export function calculateFacilityMetrics(
     }
   );
 
-  const targetPop = facility.targetPopulation;
-
-  // Adjusted denominators based on numMonths
-  const periodUnder1Target = getMonthlyTarget(targetPop.childrenUnder1, numMonths);
-  const periodUnder5Target = getMonthlyTarget(targetPop.childrenUnder5, numMonths);
-  const periodDeliveriesTarget = getMonthlyTarget(targetPop.expectedDeliveries, numMonths);
-  const periodPregnanciesTarget = getMonthlyTarget(targetPop.expectedPregnancies, numMonths);
-  const wraTarget = getMonthlyTarget(targetPop.womenOfReproductiveAge, numMonths);
-  const adolescentGirlsTarget = Math.round(wraTarget * 0.15); // Target for HPV vaccine (9-14 yrs)
+  const submittedReportsCount = facDataList.filter((d) => d.reportStatus === 'Submitted').length;
+  const reportingCompletenessRate = Math.min(100, Math.round((facDataList.length / targetMonths) * 100));
+  const latestSubmissionDate = facDataList[facDataList.length - 1]?.submittedDate;
 
   // Standard & 2026 EPI Coverage Rates
   const penta1CoverageRate = Math.min(120, Number(((aggregated.penta1 / (periodUnder1Target || 1)) * 100).toFixed(1)));
@@ -167,7 +235,7 @@ export function calculateFacilityMetrics(
   const samRecoveryRate = aggregated.sam > 0 ? 85 : 100;
 
   // Data Quality Score (Timeliness + Completeness)
-  const dataQualityScore = Math.round((aggregated.submittedCount / (numMonths || 1)) * 100);
+  const dataQualityScore = Math.min(100, Math.round((submittedReportsCount / targetMonths) * 100));
 
   // EPI Sub-Score (Updated 2026: incorporates Penta3 30%, FIC 30%, RTS,S Malaria Vaccine 20%, HPV 10%, IPV2 10%)
   let epiScore = penta3CoverageRate * 0.3 + ficRate * 0.3 + malaria3CoverageRate * 0.2 + hpv1CoverageRate * 0.1 + ipv2CoverageRate * 0.1;
@@ -182,17 +250,21 @@ export function calculateFacilityMetrics(
   // Child Sub-Score
   let childScore = Math.max(0, Math.min(100, Math.round(ficRate * 0.4 + growthMonitoringRate * 0.3 + ebfRate * 0.15 + orsZincTreatmentRate * 0.15)));
 
-  // Disease Control Sub-Score
-  let diseaseScore = 88;
-  if (aggregated.malaria / numMonths > 120) diseaseScore -= 8;
-  if (aggregated.diarrhoea / numMonths > 25) diseaseScore -= 8;
-  if (aggregated.sam > 0) diseaseScore -= aggregated.sam * 4;
+  // Disease Control Sub-Score (surveillance completeness & clinical case management)
+  let diseaseScore = 90;
+  if (aggregated.diarrhoea > 0) {
+    diseaseScore = Math.round(75 + (orsZincTreatmentRate * 0.25));
+  }
+  if (aggregated.sam > 0) {
+    diseaseScore -= aggregated.sam * 5;
+  }
   diseaseScore = Math.max(0, Math.min(100, diseaseScore));
 
-  // TB Sub-Score
-  let tbScore = aggregated.tbScreened / numMonths > 10 ? 88 : 70;
-  if (aggregated.tbConfirmed > 0 && aggregated.tbTreatment === aggregated.tbConfirmed) {
-    tbScore = 100;
+  // TB Sub-Score (TB Screening target & treatment linkage)
+  let tbScore = aggregated.tbScreened > 0 ? 85 : 70;
+  if (aggregated.tbConfirmed > 0) {
+    const tbTreatmentRate = (aggregated.tbTreatment / aggregated.tbConfirmed) * 100;
+    tbScore = Math.round(tbTreatmentRate);
   }
 
   // Overall Weighted Score (EPI 25%, Maternal 25%, Disease 20%, Child 15%, Data Quality 10%, TB 5%)
@@ -226,19 +298,14 @@ export function calculateFacilityMetrics(
     gradeLabel = 'Grade D Critical';
   }
 
-  // Generate official credential verification code
-  const facCodeMap: Record<string, string> = {
-    zongoire_hc: 'ZHC-01',
-    zongoire_chps: 'ZCH-02',
-    apodabogo_chps: 'ACH-03',
-    dagunga_chps: 'DCH-04',
-  };
-  const codeSuffix = facCodeMap[facility.id] || 'FAC-00';
-  const credentialVerificationCode = `GHS-BW-ZSHPMS-2026-${codeSuffix}`;
-
   return {
     facilityId: facility.id,
     facilityName: facility.name,
+    hasData: true,
+    submittedReportsCount,
+    expectedReportsCount: targetMonths,
+    reportingCompletenessRate,
+    latestSubmissionDate,
     penta1CoverageRate,
     penta3CoverageRate,
     mr1CoverageRate,
@@ -292,6 +359,23 @@ export function calculateSubDistrictAlerts(
   metricsList.forEach((metric) => {
     const facilityRecords = monthlyData.filter((d) => d.facilityId === metric.facilityId);
     const latestRecord = facilityRecords[facilityRecords.length - 1];
+
+    // If facility has no submitted report for the period, alert for missing report
+    if (!metric.hasData) {
+      alerts.push({
+        id: `alert-missing-${metric.facilityId}`,
+        facilityId: metric.facilityId,
+        facilityName: metric.facilityName,
+        type: 'Missing Report',
+        severity: 'Red',
+        indicator: 'Monthly Reporting Completeness',
+        value: '0 Reports Submitted',
+        target: '100% Submission',
+        message: `${metric.facilityName} has not submitted any DHIMS2 monthly report for the selected review period.`,
+        recommendedAction: 'Contact facility in-charge to submit DHIMS2 monthly return form immediately.',
+      });
+      return;
+    }
 
     if (metric.penta3CoverageRate < 80) {
       alerts.push({

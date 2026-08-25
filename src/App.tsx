@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Navbar } from './components/Navbar';
+import { Navbar, AccountMode } from './components/Navbar';
 import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { Dhims2Importer } from './components/Dhims2Importer';
 import { DataEntryModule } from './components/DataEntryModule';
@@ -28,6 +28,15 @@ import {
   ReviewType,
   AuditLog,
 } from './types';
+import {
+  subscribeLiveFacilities,
+  subscribeLiveMonthlyRecords,
+  subscribeLiveAuditLogs,
+  saveLiveMonthlyRecord,
+  saveLiveMonthlyRecordsBatch,
+  saveLiveFacility,
+  seedLiveFacilitiesIfEmpty,
+} from './firebase/firestoreService';
 
 export default function App() {
   // State variables
@@ -41,67 +50,70 @@ export default function App() {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
-  // Data state with localStorage persistence
-  const STORAGE_KEYS = {
-    MONTHLY_DATA: 'zshpms_monthly_data_v1',
-    FACILITIES: 'zshpms_facilities_v1',
-    AUDIT_LOGS: 'zshpms_audit_logs_v1',
-  };
-
-  const [facilities, setFacilities] = useState<Facility[]>(() => {
+  // Account Mode: 'live' (Firebase Cloud DB - saves actual data, zero sample interference) vs 'demo' (Sandbox)
+  const [accountMode, setAccountMode] = useState<AccountMode>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEYS.FACILITIES);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to parse saved facilities:', e);
+      const savedMode = localStorage.getItem('zshpms_account_mode');
+      return (savedMode === 'demo' ? 'demo' : 'live') as AccountMode;
+    } catch {
+      return 'live';
     }
-    return INITIAL_FACILITIES;
   });
 
-  const [monthlyData, setMonthlyData] = useState<FacilityMonthlyData[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.MONTHLY_DATA);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to parse saved monthly data:', e);
-    }
-    return generateBaselineData();
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to parse saved audit logs:', e);
-    }
-    return INITIAL_AUDIT_LOGS;
-  });
-
-  // Persist to localStorage whenever state changes
+  // Persist account mode
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEYS.FACILITIES, JSON.stringify(facilities));
+      localStorage.setItem('zshpms_account_mode', accountMode);
     } catch (e) {
-      console.error('Error saving facilities to storage:', e);
+      console.error('Error saving account mode:', e);
     }
-  }, [facilities]);
+  }, [accountMode]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.MONTHLY_DATA, JSON.stringify(monthlyData));
-    } catch (e) {
-      console.error('Error saving monthly data to storage:', e);
-    }
-  }, [monthlyData]);
+  // Live Firestore State (for Live Account)
+  const [liveFacilities, setLiveFacilities] = useState<Facility[]>(INITIAL_FACILITIES);
+  const [liveMonthlyData, setLiveMonthlyData] = useState<FacilityMonthlyData[]>([]);
+  const [liveAuditLogs, setLiveAuditLogs] = useState<AuditLog[]>([]);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<'synced' | 'saving' | 'offline'>('synced');
 
+  // Demo Sandbox State (for Demo Account)
+  const [demoFacilities, setDemoFacilities] = useState<Facility[]>(INITIAL_FACILITIES);
+  const [demoMonthlyData, setDemoMonthlyData] = useState<FacilityMonthlyData[]>(() => generateBaselineData());
+  const [demoAuditLogs, setDemoAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
+
+  // Initialize Firestore listeners and seed facilities if empty
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(auditLogs));
-    } catch (e) {
-      console.error('Error saving audit logs to storage:', e);
-    }
-  }, [auditLogs]);
+    // Seed initial facilities in Firestore if collection is empty
+    seedLiveFacilitiesIfEmpty(INITIAL_FACILITIES).catch((err) => {
+      console.warn('Firestore seed error (offline/cached):', err);
+    });
+
+    const unsubFacilities = subscribeLiveFacilities((facilities) => {
+      if (facilities.length > 0) {
+        setLiveFacilities(facilities);
+      }
+    });
+
+    const unsubRecords = subscribeLiveMonthlyRecords((records) => {
+      // In live account, all records are actual (isSample: false)
+      setLiveMonthlyData(records);
+      setCloudSyncStatus('synced');
+    });
+
+    const unsubLogs = subscribeLiveAuditLogs((logs) => {
+      setLiveAuditLogs(logs);
+    });
+
+    return () => {
+      unsubFacilities();
+      unsubRecords();
+      unsubLogs();
+    };
+  }, []);
+
+  // Active state based on selected Account Mode
+  const facilities = accountMode === 'live' ? liveFacilities : demoFacilities;
+  const monthlyData = accountMode === 'live' ? liveMonthlyData : demoMonthlyData;
+  const auditLogs = accountMode === 'live' ? liveAuditLogs : demoAuditLogs;
 
   // Apply or remove Dark Mode class on document element
   useEffect(() => {
@@ -114,17 +126,22 @@ export default function App() {
 
   // Calculate breakdown between sample baseline records and live actual records
   const dataStats = useMemo(() => {
-    const sample = monthlyData.filter((d) => d.isSample !== false && d.dataSource !== 'actual').length;
-    const actual = monthlyData.filter((d) => d.isSample === false || d.dataSource === 'actual').length;
-    return { total: monthlyData.length, sample, actual };
-  }, [monthlyData]);
+    if (accountMode === 'live') {
+      return { total: liveMonthlyData.length, sample: 0, actual: liveMonthlyData.length };
+    }
+    const sample = demoMonthlyData.filter((d) => d.isSample !== false && d.dataSource !== 'actual').length;
+    const actual = demoMonthlyData.filter((d) => d.isSample === false || d.dataSource === 'actual').length;
+    return { total: demoMonthlyData.length, sample, actual };
+  }, [accountMode, liveMonthlyData, demoMonthlyData]);
 
   // Filter dataset based on selected data source, period, and year
   const filteredData = useMemo(() => {
     return monthlyData.filter((d) => {
-      const isRecordSample = d.isSample !== false && d.dataSource !== 'actual';
-      if (dataSourceFilter === 'actual' && isRecordSample) return false;
-      if (dataSourceFilter === 'sample' && !isRecordSample) return false;
+      if (accountMode === 'demo') {
+        const isRecordSample = d.isSample !== false && d.dataSource !== 'actual';
+        if (dataSourceFilter === 'actual' && isRecordSample) return false;
+        if (dataSourceFilter === 'sample' && !isRecordSample) return false;
+      }
 
       if (d.year !== selectedYear) return false;
       if (selectedPeriodType === 'monthly') {
@@ -138,7 +155,7 @@ export default function App() {
       }
       return true; // Annual
     });
-  }, [monthlyData, selectedYear, selectedMonth, selectedPeriodType, dataSourceFilter]);
+  }, [monthlyData, accountMode, selectedYear, selectedMonth, selectedPeriodType, dataSourceFilter]);
 
   // Period label generator
   const getPeriodLabel = () => {
@@ -170,30 +187,68 @@ export default function App() {
   const periodLabel = getPeriodLabel();
 
   // Calculated Metrics & Alerts
+  const expectedMonths = useMemo(() => {
+    if (selectedPeriodType === 'monthly') return 1;
+    if (selectedPeriodType === 'quarterly') return 3;
+    if (selectedPeriodType === 'midyear') return 6;
+    return 12;
+  }, [selectedPeriodType]);
+
   const calculatedMetrics = useMemo(() => {
-    return facilities.map((f) => calculateFacilityMetrics(f, filteredData));
-  }, [facilities, filteredData]);
+    return facilities.map((f) => calculateFacilityMetrics(f, filteredData, expectedMonths));
+  }, [facilities, filteredData, expectedMonths]);
 
   const alerts = useMemo(() => {
     return calculateSubDistrictAlerts(calculatedMetrics, filteredData);
   }, [calculatedMetrics, filteredData]);
 
   // Handle uploaded new DHIMS2 Excel/PDF dataset
-  const handleDataUploaded = (newRecords: FacilityMonthlyData[]) => {
-    setMonthlyData((prev) => [...newRecords, ...prev]);
+  const handleDataUploaded = async (newRecords: FacilityMonthlyData[]) => {
+    setCloudSyncStatus('saving');
+
+    // Ensure all uploaded records are marked actual with no sample interference
+    const sanitizedRecords = newRecords.map((r) => ({
+      ...r,
+      dataSource: 'actual' as const,
+      isSample: false,
+    }));
+
+    if (accountMode === 'live') {
+      try {
+        await saveLiveMonthlyRecordsBatch(sanitizedRecords, 'DHIMS2_Import_Batch', userEmail);
+        setCloudSyncStatus('synced');
+      } catch (err) {
+        console.error('Error saving batch to Firestore:', err);
+        setCloudSyncStatus('offline');
+      }
+    } else {
+      setDemoMonthlyData((prev) => [...sanitizedRecords, ...prev]);
+      const newLog: AuditLog = {
+        id: `LOG_${Date.now()}`,
+        fileName: 'DHIMS2_Import_Batch',
+        uploadedBy: userEmail,
+        userRole: userRole === 'admin' ? 'Administrator' : userRole,
+        timestamp: new Date().toLocaleString(),
+        status: 'Success',
+        recordsProcessed: sanitizedRecords.length,
+        period: periodLabel,
+        details: `Parsed & validated ${sanitizedRecords.length} records in Demo sandbox`,
+      };
+      setDemoAuditLogs((prev) => [newLog, ...prev]);
+    }
 
     // Automatically register any newly encountered facility names
     const newFacilitiesToRegister: Facility[] = [];
     const existingIds = new Set(facilities.map((f) => f.id));
     const existingNames = new Set(facilities.map((f) => f.name.toLowerCase()));
 
-    newRecords.forEach((rec) => {
+    sanitizedRecords.forEach((rec) => {
       const recId = rec.facilityId;
       const recName = rec.facilityName;
       if (!existingIds.has(recId) && !existingNames.has(recName.toLowerCase())) {
         const isCHPS = recName.toLowerCase().includes('chps');
         const estPop = isCHPS ? 2500 : 5500;
-        newFacilitiesToRegister.push({
+        const newFac: Facility = {
           id: recId,
           name: recName,
           type: isCHPS ? 'CHPS' : 'Health Centre',
@@ -210,86 +265,110 @@ export default function App() {
             childrenUnder5: Math.round(estPop * 0.20),
             womenOfReproductiveAge: Math.round(estPop * 0.24),
           },
-        });
+        };
+        newFacilitiesToRegister.push(newFac);
         existingIds.add(recId);
         existingNames.add(recName.toLowerCase());
+
+        if (accountMode === 'live') {
+          saveLiveFacility(newFac).catch(console.error);
+        }
       }
     });
 
-    if (newFacilitiesToRegister.length > 0) {
-      setFacilities((prev) => [...prev, ...newFacilitiesToRegister]);
+    if (newFacilitiesToRegister.length > 0 && accountMode === 'demo') {
+      setDemoFacilities((prev) => [...prev, ...newFacilitiesToRegister]);
     }
 
     // Automatically set view filters to match the imported period
-    if (newRecords.length > 0) {
-      if (newRecords[0].year) setSelectedYear(newRecords[0].year);
-      if (newRecords[0].month) setSelectedMonth(newRecords[0].month);
+    if (sanitizedRecords.length > 0) {
+      if (sanitizedRecords[0].year) setSelectedYear(sanitizedRecords[0].year);
+      if (sanitizedRecords[0].month) setSelectedMonth(sanitizedRecords[0].month);
     }
-
-    // Create new audit log
-    const newLog: AuditLog = {
-      id: `LOG_${Date.now()}`,
-      fileName: 'DHIMS2_Import_Batch',
-      uploadedBy: userEmail,
-      userRole: userRole === 'admin' ? 'Administrator' : userRole,
-      timestamp: new Date().toLocaleString(),
-      status: 'Success',
-      recordsProcessed: newRecords.length,
-      period: periodLabel,
-      details: `Parsed & validated ${newRecords.length} records across ${
-        new Set(newRecords.map((r) => r.facilityName)).size
-      } health facility/facilities`,
-    };
-
-    setAuditLogs((prev) => [newLog, ...prev]);
   };
 
   // Handle single record manual entry save
-  const handleSingleRecordSaved = (savedRecord: FacilityMonthlyData) => {
-    setMonthlyData((prev) => {
-      const idx = prev.findIndex(
-        (d) =>
-          d.facilityId === savedRecord.facilityId &&
-          d.year === savedRecord.year &&
-          d.month === savedRecord.month
-      );
-      if (idx >= 0) {
-        const updated = [...prev];
-        updated[idx] = savedRecord;
-        return updated;
-      }
-      return [savedRecord, ...prev];
-    });
+  const handleSingleRecordSaved = async (savedRecord: FacilityMonthlyData) => {
+    setCloudSyncStatus('saving');
 
-    // Create audit log
-    const newLog: AuditLog = {
-      id: `LOG_${Date.now()}`,
-      fileName: 'Manual_Data_Entry_Form',
-      uploadedBy: userEmail,
-      userRole: userRole === 'admin' ? 'Administrator' : userRole,
-      timestamp: new Date().toLocaleString(),
-      status: 'Success',
-      recordsProcessed: 1,
-      period: savedRecord.monthLabel,
-      details: `Manual monthly data submitted for ${savedRecord.facilityName}`,
+    const cleanRecord: FacilityMonthlyData = {
+      ...savedRecord,
+      dataSource: 'actual',
+      isSample: false,
     };
-    setAuditLogs((prev) => [newLog, ...prev]);
+
+    if (accountMode === 'live') {
+      try {
+        await saveLiveMonthlyRecord(cleanRecord, userEmail);
+        setCloudSyncStatus('synced');
+      } catch (err) {
+        console.error('Error saving record to Firestore:', err);
+        setCloudSyncStatus('offline');
+      }
+    } else {
+      setDemoMonthlyData((prev) => {
+        const idx = prev.findIndex(
+          (d) =>
+            d.facilityId === cleanRecord.facilityId &&
+            d.year === cleanRecord.year &&
+            d.month === cleanRecord.month
+        );
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = cleanRecord;
+          return updated;
+        }
+        return [cleanRecord, ...prev];
+      });
+
+      const newLog: AuditLog = {
+        id: `LOG_${Date.now()}`,
+        fileName: 'Manual_Data_Entry_Form',
+        uploadedBy: userEmail,
+        userRole: userRole === 'admin' ? 'Administrator' : userRole,
+        timestamp: new Date().toLocaleString(),
+        status: 'Success',
+        recordsProcessed: 1,
+        period: cleanRecord.monthLabel,
+        details: `Manual monthly data submitted for ${cleanRecord.facilityName}`,
+      };
+      setDemoAuditLogs((prev) => [newLog, ...prev]);
+    }
   };
 
-  // Handle restoring baseline datasets
+  // Handle updating facility populations
+  const handleUpdateFacilities = (updatedList: Facility[]) => {
+    if (accountMode === 'live') {
+      setLiveFacilities(updatedList);
+      updatedList.forEach((fac) => {
+        saveLiveFacility(fac).catch(console.error);
+      });
+    } else {
+      setDemoFacilities(updatedList);
+    }
+  };
+
+  // Handle restoring baseline datasets (Demo mode only)
   const handleRestoreBaseline = () => {
-    setMonthlyData(generateBaselineData());
-    setFacilities(INITIAL_FACILITIES);
+    if (accountMode === 'demo') {
+      setDemoMonthlyData(generateBaselineData());
+      setDemoFacilities(INITIAL_FACILITIES);
+      setDemoAuditLogs(INITIAL_AUDIT_LOGS);
+    }
   };
 
-  // Handle purging only sample/demo data to leave clean actual dataset
+  // Handle clearing sample data
   const handleClearSampleData = () => {
-    setMonthlyData((prev) => prev.filter((d) => d.isSample === false || d.dataSource === 'actual'));
+    if (accountMode === 'demo') {
+      setDemoMonthlyData((prev) => prev.filter((d) => d.isSample === false || d.dataSource === 'actual'));
+    }
   };
 
-  // Handle clearing all sample data & actual data
+  // Handle clearing all data
   const handleClearAllData = () => {
-    setMonthlyData([]);
+    if (accountMode === 'demo') {
+      setDemoMonthlyData([]);
+    }
   };
 
   return (
@@ -312,6 +391,9 @@ export default function App() {
         dataSourceFilter={dataSourceFilter}
         setDataSourceFilter={setDataSourceFilter}
         dataStats={dataStats}
+        accountMode={accountMode}
+        setAccountMode={setAccountMode}
+        cloudSyncStatus={cloudSyncStatus}
       />
 
       {/* Main Body Content Viewport */}
@@ -356,7 +438,7 @@ export default function App() {
         {activeTab === 'population' && (
           <PopulationManager
             facilities={facilities}
-            onUpdateFacilities={setFacilities}
+            onUpdateFacilities={handleUpdateFacilities}
             userRole={userRole}
           />
         )}
@@ -419,11 +501,12 @@ export default function App() {
       {/* Footer Banner */}
       <footer className="bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 py-4 px-6 text-center text-xs text-neutral-500 dark:text-neutral-400">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            <strong>Zongoire Sub-District Health Performance Monitoring System (ZSHPMS)</strong> • Ghana Health Service (GHS)
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+            <strong>Zongoire Sub-District Health Performance Monitoring System (ZSHPMS)</strong> • Ghana Health Service
           </div>
           <div>
-            Decision Support & DHIMS2 M&E Analytics Platform • Version 2.4
+            Connected to <strong>Firebase Cloud Database</strong> • Live & Demo Accounts Active
           </div>
         </div>
       </footer>

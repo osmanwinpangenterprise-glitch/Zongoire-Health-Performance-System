@@ -184,6 +184,11 @@ export interface CalculatedFacilityMetrics {
   samRecoveryRate: number; // SAM case recovery rate %
   
   // Scores & Ranking Credentials
+  hasData: boolean; // True if facility has at least one submitted monthly record in the period
+  submittedReportsCount: number; // Actual number of submitted monthly records
+  expectedReportsCount: number; // Expected monthly reports for the review period
+  reportingCompletenessRate: number; // (submittedReportsCount / expectedReportsCount) * 100
+  latestSubmissionDate?: string;
   epiScore: number;
   maternalScore: number;
   diseaseScore: number;

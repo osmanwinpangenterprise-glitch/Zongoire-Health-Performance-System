@@ -38,12 +38,33 @@ export const MeInsights: React.FC<MeInsightsProps> = ({
   const [isExportingPpt, setIsExportingPpt] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const sortedMetrics = [...metrics].sort((a, b) => b.overallScore - a.overallScore);
-  const topFacility = sortedMetrics[0]?.facilityName || 'Zongoire Health Centre';
-  const lowestFacility = sortedMetrics[sortedMetrics.length - 1]?.facilityName || 'Dagunga CHPS';
-  const overallAvg = Math.round(
-    metrics.reduce((acc, curr) => acc + curr.overallScore, 0) / (metrics.length || 1)
+  const facilitiesWithData = metrics.filter((m) => m.hasData);
+  const totalFacilities = metrics.length || 4;
+  const submittedFacilitiesCount = facilitiesWithData.length;
+  const reportingCompleteness = Math.round(
+    (submittedFacilitiesCount / (totalFacilities || 1)) * 100
   );
+
+  const sortedMetrics = [...metrics].sort((a, b) => {
+    if (a.hasData && !b.hasData) return -1;
+    if (!a.hasData && b.hasData) return 1;
+    return b.overallScore - a.overallScore;
+  });
+
+  const topFacility =
+    facilitiesWithData.length > 0 ? sortedMetrics[0] : null;
+  const lowestFacility =
+    facilitiesWithData.length > 0
+      ? sortedMetrics[facilitiesWithData.length - 1]
+      : null;
+
+  const overallAvg =
+    facilitiesWithData.length > 0
+      ? Math.round(
+          facilitiesWithData.reduce((acc, curr) => acc + curr.overallScore, 0) /
+            facilitiesWithData.length
+        )
+      : 0;
 
   const handleExportPpt = async () => {
     try {
@@ -88,32 +109,32 @@ export const MeInsights: React.FC<MeInsightsProps> = ({
 
 **Reporting Context:** ${periodLabel} (${year})  
 **Facilities Monitored:** Zongoire Health Centre, Zongoire CHPS, Apodabogo CHPS, Dagunga CHPS  
-**Sub-District Overall Score:** **${overallAvg}%** (${overallAvg >= 80 ? 'Good / Green' : 'Needs Attention / Amber'})  
+**Reporting Completeness:** **${reportingCompleteness}%** (${submittedFacilitiesCount} of ${totalFacilities} facilities submitted returns)  
+**Sub-District Overall Score:** **${overallAvg}%** (${overallAvg >= 80 ? 'Good / Green' : overallAvg >= 70 ? 'Needs Attention / Amber' : 'Critical / Red'})  
 
 ---
 
 ### 1. Executive Summary
-During the **${periodLabel} (${year})** monitoring period, the Zongoire Sub-District achieved an overall health performance score of **${overallAvg}%**. Routine service delivery statistics uploaded into DHIMS2 show strong engagement across reproductive and maternal health services, particularly in skilled birth attendance at Zongoire Health Centre. However, coverage gaps in child immunization retention (Penta1 to Penta3 dropout) and community outreach completeness require targeted supervisory support across the three CHPS zones.
+During the **${periodLabel} (${year})** monitoring period, the Zongoire Sub-District achieved a reporting completeness rate of **${reportingCompleteness}%** and an overall health performance score of **${overallAvg}%**. Routine service delivery statistics uploaded into DHIMS2 show active engagement across reproductive and maternal health services, particularly in skilled birth attendance at Zongoire Health Centre. ${topFacility ? `The top performing facility was **${topFacility.facilityName}** (${topFacility.overallScore}%).` : 'Awaiting routine facility return submissions.'}
 
-### 2. Top & Lowest Performing Facilities
-- **Top Performing Facility:** **${topFacility}** with an overall performance score of **${sortedMetrics[0]?.overallScore}%**. High scores were driven by ${sortedMetrics[0]?.penta3CoverageRate}% Penta3 coverage and excellent skilled delivery management.
-- **Lowest Performing Facility:** **${lowestFacility}** with an overall score of **${sortedMetrics[sortedMetrics.length - 1]?.overallScore}%**. Key factors include a **${sortedMetrics[sortedMetrics.length - 1]?.pentaDropoutRate}%** Penta dropout rate and missed community outreach sessions.
+### 2. Facility Performance League & Scorecard
+${topFacility ? `- **Top Performing Facility:** **${topFacility.facilityName}** with an overall performance score of **${topFacility.overallScore}%** (Penta3: ${topFacility.penta3CoverageRate}%, Skilled Delivery: ${topFacility.skilledDeliveryRate}%).` : '- Top Performing Facility: Pending data submission.'}
+${lowestFacility && lowestFacility.facilityId !== topFacility?.facilityId ? `- **Facility Requiring Priority Support:** **${lowestFacility.facilityName}** with an overall score of **${lowestFacility.overallScore}%** (Penta Dropout: ${lowestFacility.pentaDropoutRate}%).` : ''}
 
 ### 3. Underperforming Indicators & Coverage Gaps
-1. **Immunization Dropout Rate:** ${lowestFacility} recorded a **${sortedMetrics[sortedMetrics.length - 1]?.pentaDropoutRate}%** Penta dropout rate, exceeding the GHS national ceiling threshold of 10.0%. Children receiving Penta1 at 6 weeks are failing to return for their 14-week Penta3 and 9-month Measles-Rubella (MR1) doses.
-2. **ANC4/8 Retention:** While ANC1 early pregnancy bookings remain high across all facilities, drop-off between ANC1 and ANC4/8 remains evident in Dagunga CHPS (**${sortedMetrics.find(m => m.facilityId === 'dagunga_chps')?.anc4CoverageRate}%** ANC4 coverage).
-3. **Malnutrition Screening:** ${alerts.filter(a => a.type === 'Target Gap').length > 0 ? 'Active Severe Acute Malnutrition (SAM) cases recorded in Dagunga CHPS and Apodabogo CHPS require urgent therapeutic feeding.' : 'No active SAM cases reported this period.'}
+1. **Immunization Retention:** ${lowestFacility ? `${lowestFacility.facilityName} recorded a **${lowestFacility.pentaDropoutRate}%** Penta dropout rate against the GHS national ceiling threshold of 10.0%.` : 'Track children defaulted on routine Penta3 and MR1.'}
+2. **Skilled Delivery & ANC Retention:** Ongoing focus on mobilizing expectant mothers to register before 12 weeks gestation (ANC1) and complete 8 contacts.
+3. **Severe Acute Malnutrition (SAM):** ${alerts.filter(a => a.type === 'Target Gap').length > 0 ? 'Active Severe Acute Malnutrition cases flagged across CHPS zones requiring OTP RUTF support.' : 'No critical SAM target breaches reported.'}
 
 ### 4. Disease Surveillance & OPD Morbidity Trends
-- **Malaria (OPD Confirmed):** Remains the primary cause of morbidity across all 4 facilities, accounting for approximately **45%** of total OPD consultations.
-- **Diarrhoea & WASH Spikes:** High diarrhoea case counts recorded in Dagunga CHPS due to seasonal surface water usage.
-- **Epidemic Preparedness:** Zero cases of Measles, Cholera, or Meningitis reported in the sub-district during this review period.
+- **Malaria (OPD Confirmed):** Continues to represent the primary morbidity across sub-district consultations.
+- **Diarrhoea & WASH:** Enhanced water safety and hygiene education in CHPS outreach zones.
+- **Epidemic Preparedness:** Zero suspected cases of Yellow Fever, Cholera, or Meningitis reported.
 
 ### 5. Strategic M&E Recommendations & SDHMT Action Points
-1. **Defaulter Tracing Campaign:** Mandate CHOs at ${lowestFacility} to partner with Community Health Volunteers (CHVs) and durbars to track children defaulted on Penta3 and MR1.
-2. **Community Transportation Network for Skilled Deliveries:** Strengthen community emergency transport schemes in Dagunga CHPS and Apodabogo CHPS to transfer laboring mothers to Zongoire Health Centre.
-3. **Outreach Session Recovery Plan:** Require CHOs with missed outreach sessions to submit revised monthly session timetables to the Sub-District Leader (PNO).
-4. **Data Quality Audit (DQA):** Conduct an onsite DHIMS2 tally card audit at all 4 facilities before the upcoming district quarterly performance review.
+1. **Defaulter Tracing Campaign:** Deploy CHOs and CHVs to conduct monthly defaulter audits using the Child Health Record books.
+2. **Emergency Transport System:** Maintain motorcycle ambulance linkages to transfer emergency obstetric cases to Zongoire Health Centre and Zebilla District Hospital.
+3. **Data Completeness Enforcement:** Ensure 100% of facility monthly returns (DHIMS2 Form A) are validated by the 5th of every month.
 `;
   };
 

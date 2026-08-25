@@ -1,0 +1,77 @@
+{
+  "entities": {
+    "Facility": {
+      "title": "Facility",
+      "description": "Health facility master record in Zongoire Sub-District",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["Health Centre", "CHPS"] },
+        "subDistrict": { "type": "string" },
+        "district": { "type": "string" },
+        "region": { "type": "string" },
+        "inCharge": { "type": "string" },
+        "contact": { "type": "string" },
+        "targetPopulation": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "type"]
+    },
+    "MonthlyRecord": {
+      "title": "MonthlyRecord",
+      "description": "Validated monthly DHIMS2 performance and surveillance data for a facility",
+      "type": "object",
+      "properties": {
+        "facilityId": { "type": "string" },
+        "facilityName": { "type": "string" },
+        "year": { "type": "number" },
+        "month": { "type": "number" },
+        "monthLabel": { "type": "string" },
+        "reportStatus": { "type": "string", "enum": ["Submitted", "Late", "Missing"] },
+        "submittedDate": { "type": "string" },
+        "dataSource": { "type": "string", "enum": ["actual", "sample"] },
+        "isSample": { "type": "boolean" },
+        "epi": { "type": "object" },
+        "diseaseSurveillance": { "type": "object" },
+        "maternalHealth": { "type": "object" },
+        "childHealth": { "type": "object" },
+        "tb": { "type": "object" },
+        "updatedAt": { "type": "string" },
+        "submittedBy": { "type": "string" }
+      },
+      "required": ["facilityId", "facilityName", "year", "month"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System audit trail for imports, edits, and submissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "fileName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "period": { "type": "string" },
+        "recordsProcessed": { "type": "number" },
+        "status": { "type": "string", "enum": ["Success", "Failed", "Warning"] },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "/facilities/{facilityId}": {
+      "schema": "Facility",
+      "description": "Sub-district health facilities and catchment targets"
+    },
+    "/monthly_records/{recordId}": {
+      "schema": "MonthlyRecord",
+      "description": "Actual facility monthly DHIMS2 performance data"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Audit trails for data actions"
+    }
+  }
+}

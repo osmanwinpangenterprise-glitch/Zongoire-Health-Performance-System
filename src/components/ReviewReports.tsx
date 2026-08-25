@@ -11,9 +11,10 @@ import {
   FileSpreadsheet,
   Presentation,
   Loader2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { CalculatedFacilityMetrics, Facility, ReviewType, FacilityMonthlyData } from '../types';
-import { exportElementToPdf, exportDataToExcel } from '../utils/exportUtils';
+import { exportElementToPdf, exportDataToExcel, exportElementToPng } from '../utils/exportUtils';
 import { exportReviewReportToPptx } from '../utils/exportPptx';
 
 interface ReviewReportsProps {
@@ -35,11 +36,30 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
 }) => {
   const [activeReportTab, setActiveReportTab] = useState<ReviewType>(selectedPeriodType);
   const [isExportingPpt, setIsExportingPpt] = useState(false);
+  const [isExportingPng, setIsExportingPng] = useState(false);
 
-  const sortedMetrics = [...metrics].sort((a, b) => b.overallScore - a.overallScore);
-  const overallAvg = Math.round(
-    metrics.reduce((acc, curr) => acc + curr.overallScore, 0) / (metrics.length || 1)
+  const totalFacilities = facilities.length;
+  const facilitiesWithData = metrics.filter((m) => m.hasData);
+  const submittedFacilitiesCount = facilitiesWithData.length;
+  const reportingCompleteness = Math.round(
+    (submittedFacilitiesCount / (totalFacilities || 1)) * 100
   );
+
+  const overallAvg =
+    facilitiesWithData.length > 0
+      ? Math.round(
+          facilitiesWithData.reduce((acc, curr) => acc + curr.overallScore, 0) /
+            facilitiesWithData.length
+        )
+      : 0;
+
+  const sortedMetrics = [...metrics].sort((a, b) => {
+    if (a.hasData && !b.hasData) return -1;
+    if (!a.hasData && b.hasData) return 1;
+    return b.overallScore - a.overallScore;
+  });
+
+  const bestFacility = facilitiesWithData.length > 0 ? sortedMetrics[0] : null;
 
   // Sample Action Items Matrix for GHS Sub-District Health Management Team
   const actionItems = [
@@ -114,6 +134,18 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
     }
   };
 
+  // Export Report to High-Resolution PNG image
+  const handleExportPngReport = async () => {
+    try {
+      setIsExportingPng(true);
+      await exportElementToPng('formal-review-report', `Zongoire_${activeReportTab.toUpperCase()}_Review_${selectedYear}.png`);
+    } catch (err) {
+      console.error('Error exporting PNG:', err);
+    } finally {
+      setIsExportingPng(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Header Banner */}
@@ -132,6 +164,22 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="export-review-png-btn"
+            type="button"
+            disabled={isExportingPng}
+            onClick={handleExportPngReport}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded text-xs flex items-center space-x-1.5 shadow-md border border-emerald-400 transition-all cursor-pointer disabled:opacity-50"
+            title="Download full report as high-resolution PNG image"
+          >
+            {isExportingPng ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <ImageIcon className="w-3.5 h-3.5 text-amber-300" />
+            )}
+            <span>{isExportingPng ? 'Exporting PNG...' : 'Export (PNG)'}</span>
+          </button>
+
           <button
             id="export-review-ppt-btn"
             type="button"
@@ -227,7 +275,7 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
             <span>1. Executive Summary & Overview</span>
           </h2>
           <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-xs">
-            This official <strong>{activeReportTab.toUpperCase()} Review Report</strong> presents the aggregated routine service delivery statistics for Zongoire Sub-District for <strong>{periodLabel}</strong>. Overall sub-district health performance achieved <strong>{overallAvg}%</strong> against GHS benchmarks. High performance was sustained in reproductive maternal health and skilled delivery attendance at Zongoire Health Centre. However, attention is required in CHPS outreach regularity and child immunization dropout tracing.
+            This official <strong>{activeReportTab.toUpperCase()} Review Report</strong> presents the aggregated routine service delivery statistics for Zongoire Sub-District for <strong>{periodLabel}</strong>. Reporting completeness for this period stands at <strong>{reportingCompleteness}%</strong> ({submittedFacilitiesCount} of {totalFacilities} facilities submitted returns). Overall sub-district health performance achieved <strong>{overallAvg}%</strong> against GHS benchmarks. {bestFacility ? `Top performing facility was ${bestFacility.facilityName} with an overall score of ${bestFacility.overallScore}%.` : 'Awaiting DHIMS2 monthly returns to calculate active scorecards.'}
           </p>
         </div>
 
@@ -235,7 +283,7 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
         <div className="space-y-1.5">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center space-x-1.5 border-b border-slate-100 dark:border-slate-800 pb-1">
             <Building2 className="w-3.5 h-3.5 text-[#006633]" />
-            <span>2. Key Achievements & Best Performers</span>
+            <span>2. Key Achievements & Performance Metrics</span>
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -244,7 +292,7 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
                 Top Facility Score
               </span>
               <p className="text-slate-800 dark:text-slate-200 font-bold text-xs">
-                {sortedMetrics[0]?.facilityName} ({sortedMetrics[0]?.overallScore}%)
+                {bestFacility ? `${bestFacility.facilityName} (${bestFacility.overallScore}%)` : 'Pending Data'}
               </p>
             </div>
             <div className="bg-sky-50/80 dark:bg-sky-950/40 p-2.5 rounded border border-sky-200 dark:border-sky-900 space-y-0.5">
@@ -252,7 +300,7 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
                 Penta3 Coverage Baseline
               </span>
               <p className="text-slate-800 dark:text-slate-200 font-bold text-xs">
-                Zongoire HC achieved {sortedMetrics[0]?.penta3CoverageRate}% Penta3 coverage.
+                {bestFacility ? `${bestFacility.facilityName}: ${bestFacility.penta3CoverageRate}% Penta3` : 'Pending Data'}
               </p>
             </div>
             <div className="bg-amber-50/80 dark:bg-amber-950/40 p-2.5 rounded border border-amber-200 dark:border-amber-900 space-y-0.5">
@@ -260,7 +308,7 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
                 Reporting Completeness
               </span>
               <p className="text-slate-800 dark:text-slate-200 font-bold text-xs">
-                100% of 4 facilities submitted monthly reports.
+                {reportingCompleteness}% ({submittedFacilitiesCount} of {totalFacilities} facilities submitted)
               </p>
             </div>
           </div>
@@ -279,29 +327,53 @@ export const ReviewReports: React.FC<ReviewReportsProps> = ({
                 <tr className="bg-slate-50 dark:bg-slate-800/80 text-slate-400 dark:text-slate-400 font-bold border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase tracking-wider">
                   <th className="py-2 px-3">Rank</th>
                   <th className="py-2 px-3">Facility Name</th>
+                  <th className="py-2 px-3 text-center">Data Status</th>
                   <th className="py-2 px-3 text-center">Penta3 %</th>
                   <th className="py-2 px-3 text-center">Dropout %</th>
                   <th className="py-2 px-3 text-center">Skilled Birth %</th>
                   <th className="py-2 px-3 text-center">ANC4 %</th>
                   <th className="py-2 px-3 text-center">Overall Score</th>
-                  <th className="py-2 px-3 text-center">Status</th>
+                  <th className="py-2 px-3 text-center">Grade</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {sortedMetrics.map((m, idx) => (
                   <tr key={m.facilityId} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                    <td className="py-2 px-3 font-bold">#{idx + 1}</td>
+                    <td className="py-2 px-3 font-bold">{m.hasData ? `#${idx + 1}` : '-'}</td>
                     <td className="py-2 px-3 font-bold text-slate-800 dark:text-white">
                       {m.facilityName}
                     </td>
-                    <td className="py-2 px-3 text-center font-semibold">{m.penta3CoverageRate}%</td>
-                    <td className="py-2 px-3 text-center font-semibold">{m.pentaDropoutRate}%</td>
-                    <td className="py-2 px-3 text-center font-semibold">{m.skilledDeliveryRate}%</td>
-                    <td className="py-2 px-3 text-center font-semibold">{m.anc4CoverageRate}%</td>
-                    <td className="py-2 px-3 text-center font-extrabold text-slate-800 dark:text-white">{m.overallScore}%</td>
                     <td className="py-2 px-3 text-center">
-                      <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                        {m.performanceLevel}
+                      {m.hasData ? (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                          {m.submittedReportsCount} Submitted
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-center font-semibold">{m.hasData ? `${m.penta3CoverageRate}%` : '-'}</td>
+                    <td className="py-2 px-3 text-center font-semibold">{m.hasData ? `${m.pentaDropoutRate}%` : '-'}</td>
+                    <td className="py-2 px-3 text-center font-semibold">{m.hasData ? `${m.skilledDeliveryRate}%` : '-'}</td>
+                    <td className="py-2 px-3 text-center font-semibold">{m.hasData ? `${m.anc4CoverageRate}%` : '-'}</td>
+                    <td className="py-2 px-3 text-center font-extrabold text-slate-800 dark:text-white">
+                      {m.hasData ? `${m.overallScore}%` : '0%'}
+                    </td>
+                    <td className="py-2 px-3 text-center">
+                      <span
+                        className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                          !m.hasData
+                            ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                            : m.overallScore >= 80
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : m.overallScore >= 70
+                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                            : 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                        }`}
+                      >
+                        {!m.hasData ? 'Pending' : m.gradeLabel ? m.gradeLabel.split(' ')[1] : m.performanceLevel}
                       </span>
                     </td>
                   </tr>
