@@ -20,13 +20,13 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Capture beforeinstallprompt as early as possible so it is never missed
+      // Allow browser to natively handle beforeinstallprompt and show install icon in address bar/URL omnibox
       window.deferredPrompt = null;
       window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
+        // We do not preventDefault so browser-supported install icon and address bar prompt appear natively
         window.deferredPrompt = e;
         window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
-        console.log('[PWA] beforeinstallprompt event captured successfully.');
+        console.log('[PWA] Native beforeinstallprompt active for address bar installation.');
       });
 
       window.addEventListener('appinstalled', () => {
