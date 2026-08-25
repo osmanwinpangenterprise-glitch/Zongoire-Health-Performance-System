@@ -55,5 +55,21 @@
       "form_factor": "narrow",
       "label": "GHS M&E Mobile Health Officer View"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Data Entry",
+      "short_name": "Data Entry",
+      "description": "Direct routine health indicator data entry",
+      "url": "/?tab=entry",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Executive Dashboard",
+      "short_name": "Dashboard",
+      "description": "Zongoire Sub-District health metrics overview",
+      "url": "/?tab=dashboard",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
   ]
 }

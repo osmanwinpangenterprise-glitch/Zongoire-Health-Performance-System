@@ -304,18 +304,40 @@ export const PwaInstallModal: React.FC<PwaInstallModalProps> = ({
             {/* Platform Instructions Details */}
             <div className="pt-2 text-xs text-slate-600 dark:text-slate-300 space-y-2">
               {selectedPlatform === 'desktop' && (
-                <div className="space-y-2 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-start space-x-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">1</span>
-                    <p>Open the app in a standalone tab using the <strong>"Open in Dedicated Tab"</strong> button above.</p>
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                  {/* Visual Mockup of the Address Bar */}
+                  <div className="bg-white dark:bg-slate-900 rounded-lg p-2 border border-slate-200 dark:border-slate-700 shadow-xs space-y-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Browser Address Bar (Chrome / Edge)</span>
+                    <div className="bg-slate-100 dark:bg-slate-800 rounded-md px-3 py-1.5 flex items-center justify-between text-xs border border-slate-300 dark:border-slate-700">
+                      <div className="flex items-center space-x-1.5 text-slate-500 truncate text-[11px] font-mono">
+                        <span className="text-emerald-600 font-bold">https://</span>
+                        <span className="truncate">ghs-zongoire-health-me.app</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5 shrink-0 ml-2">
+                        {/* Address Bar Install Icon Highlighted */}
+                        <div className="bg-emerald-100 dark:bg-emerald-950 border border-emerald-400 text-emerald-900 dark:text-emerald-300 px-2 py-0.5 rounded flex items-center space-x-1 text-[10px] font-black animate-pulse shadow-xs">
+                          <Laptop className="w-3 h-3 text-emerald-700 dark:text-emerald-400" />
+                          <span>INSTALL</span>
+                        </div>
+                        <span className="text-slate-400 text-xs">★</span>
+                        <span className="text-slate-400 text-xs font-bold">⋮</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-start space-x-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
-                    <p>Look at the <strong>right edge of your address bar</strong> for the <strong>Install icon (💻 or ⊕)</strong>.</p>
-                  </div>
-                  <div className="flex items-start space-x-2.5">
-                    <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
-                    <p>Or click the <strong>3-dots menu (⋮)</strong> $\rightarrow$ <strong>"Save and share"</strong> $\rightarrow$ <strong>"Install Ghana Health Service M&E System"</strong>.</p>
+
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-start space-x-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">1</span>
+                      <p>Click <strong>"Open in Dedicated Tab"</strong> to leave the embedded preview frame.</p>
+                    </div>
+                    <div className="flex items-start space-x-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
+                      <p>Look at the <strong>right side of your address bar</strong> for the <strong>Install icon (💻 or ⊕)</strong> as shown above.</p>
+                    </div>
+                    <div className="flex items-start space-x-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#006633] text-white flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
+                      <p>Click the <strong>Install icon</strong> and confirm <strong>"Install"</strong> to add GHS M&E as a desktop app.</p>
+                    </div>
                   </div>
                 </div>
               )}
