@@ -141,6 +141,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const saveBtnTimerRef = useRef<NodeJS.Timeout | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const justSavedRef = useRef<boolean>(false);
 
   // Form State
   const [formData, setFormData] = useState<FacilityMonthlyData>(() => createInitialForm(targetFacilityId, facilities, entryYear, entryMonth));
@@ -314,6 +315,12 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
 
   // Load existing data or local draft when target facility/year/month changes
   useEffect(() => {
+    // If a save just completed, we already cleared fields for the next entry
+    if (justSavedRef.current) {
+      justSavedRef.current = false;
+      return;
+    }
+
     // Clear any pending debounce on selection switch
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -333,6 +340,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
 
     if (existing) {
       setFormData(JSON.parse(JSON.stringify(existing)));
+      formDataRef.current = JSON.parse(JSON.stringify(existing));
       setAutoSaveState({ status: 'idle', lastSavedAt: null });
     } else {
       // Check if there is an unsaved local draft in browser
@@ -342,6 +350,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
           const parsed = JSON.parse(savedDraftStr);
           if (parsed && parsed.facilityId === targetFacilityId) {
             setFormData(parsed);
+            formDataRef.current = parsed;
             loadedFromDraft = true;
             setDraftRestoredMsg(`Restored unsaved local draft for ${parsed.facilityName || 'Facility'} (${MONTH_NAMES[entryMonth - 1]} ${entryYear})`);
             setAutoSaveState({
@@ -356,7 +365,9 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
       }
 
       if (!loadedFromDraft) {
-        setFormData(createInitialForm(targetFacilityId, facilities, entryYear, entryMonth));
+        const initialForm = createInitialForm(targetFacilityId, facilities, entryYear, entryMonth);
+        setFormData(initialForm);
+        formDataRef.current = initialForm;
         setAutoSaveState({ status: 'idle', lastSavedAt: null });
       }
     }
@@ -366,7 +377,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
     setShowFloatingToast(false);
     setSubmissionAttempted(false);
     setValidationErrors([]);
-  }, [targetFacilityId, entryYear, entryMonth, monthlyData, facilities]);
+  }, [targetFacilityId, entryYear, entryMonth, facilities]);
 
   // Clean up timers
   useEffect(() => {
@@ -749,8 +760,17 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
         tbCount: counts.tbCount,
       });
 
+      // Clear all fields and reset form state to empty ready for next entry
+      justSavedRef.current = true;
+      const freshEmptyForm = createInitialForm(targetFacilityId, facilities, entryYear, entryMonth);
+      setFormData(freshEmptyForm);
+      formDataRef.current = freshEmptyForm;
+      setSubmissionAttempted(false);
+      setValidationErrors([]);
+      setActiveFormSection('epi');
+
       setSaveSuccessMsg(
-        `Official monthly return for ${finalFacilityName} (${monthLabel}) verified & committed to database! Performance scores, indicator targets, and review reports are now updated.`
+        `Monthly return for ${finalFacilityName} (${monthLabel}) verified & committed to database! Form fields have been cleared and are ready for your next entry.`
       );
       setSaveStatus('saved');
       setShowFloatingToast(true);
@@ -767,6 +787,57 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
         setSaveStatus('idle');
       }, 6000);
     }, 300);
+  };
+
+  // Quick navigation to advance to the next month with empty fields
+  const handleAdvanceNextMonth = () => {
+    let nextMo = entryMonth + 1;
+    let nextYr = entryYear;
+    if (nextMo > 12) {
+      nextMo = 1;
+      nextYr = entryYear + 1;
+    }
+    justSavedRef.current = true;
+    setEntryMonth(nextMo);
+    setEntryYear(nextYr);
+    const fresh = createInitialForm(targetFacilityId, facilities, nextYr, nextMo);
+    setFormData(fresh);
+    formDataRef.current = fresh;
+    setSaveSuccessMsg(null);
+    setSaveStatus('idle');
+    setShowFloatingToast(false);
+    setActiveFormSection('epi');
+  };
+
+  // Quick navigation to cycle to the next facility with empty fields
+  const handleAdvanceNextFacility = () => {
+    const currentIndex = facilities.findIndex((f) => f.id === targetFacilityId);
+    const nextIndex = (currentIndex + 1) % facilities.length;
+    const nextFac = facilities[nextIndex];
+    if (nextFac) {
+      justSavedRef.current = true;
+      setTargetFacilityId(nextFac.id);
+      const fresh = createInitialForm(nextFac.id, facilities, entryYear, entryMonth);
+      setFormData(fresh);
+      formDataRef.current = fresh;
+      setSaveSuccessMsg(null);
+      setSaveStatus('idle');
+      setShowFloatingToast(false);
+      setActiveFormSection('epi');
+    }
+  };
+
+  // Re-load the record that was just committed if the user wants to review or edit
+  const handleReloadSavedRecord = () => {
+    const savedRec = monthlyData.find(
+      (d) => d.facilityId === targetFacilityId && d.year === entryYear && d.month === entryMonth
+    );
+    if (savedRec) {
+      setFormData(JSON.parse(JSON.stringify(savedRec)));
+      formDataRef.current = JSON.parse(JSON.stringify(savedRec));
+      setSaveSuccessMsg(null);
+      setShowFloatingToast(false);
+    }
   };
 
   const currentFacilityObj = facilities.find((f) => f.id === targetFacilityId);
@@ -834,7 +905,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
           id="floating-save-toast"
           role="status"
           aria-live="polite"
-          className="fixed bottom-6 right-6 z-50 max-w-md w-[92vw] sm:w-[420px] bg-white dark:bg-neutral-900 border-2 border-emerald-500 dark:border-emerald-500 rounded-2xl shadow-2xl p-4.5 text-neutral-900 dark:text-white transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
+          className="fixed bottom-6 right-6 z-50 max-w-md w-[92vw] sm:w-[440px] bg-white dark:bg-neutral-900 border-2 border-emerald-500 dark:border-emerald-500 rounded-2xl shadow-2xl p-4.5 text-neutral-900 dark:text-white transition-all duration-300 animate-in fade-in slide-in-from-bottom-5"
         >
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start space-x-3">
@@ -851,14 +922,14 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
                   <span className="bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wide border border-emerald-300 dark:border-emerald-800">
-                    DHIMS2 Committed
+                    Saved & Fields Cleared
                   </span>
                   <span className="text-[10px] text-neutral-400 dark:text-neutral-500">
                     {lastSavedSnapshot.timestamp}
                   </span>
                 </div>
                 <h4 className="font-bold text-sm text-neutral-900 dark:text-white">
-                  Data Saved Successfully!
+                  Data Saved — Form Ready for Next Entry!
                 </h4>
                 <p className="text-xs text-neutral-600 dark:text-neutral-300">
                   <strong className="text-emerald-700 dark:text-emerald-400">{lastSavedSnapshot.facilityName}</strong> • {lastSavedSnapshot.monthLabel}
@@ -893,32 +964,38 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
             </div>
           </div>
 
-          {/* Direct Navigation Links */}
-          {onNavigateTab && (
-            <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-neutral-100 dark:border-neutral-800">
+          {/* Quick Next Entry Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-neutral-100 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={handleAdvanceNextMonth}
+              className="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-1.5 px-2.5 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all shadow-xs cursor-pointer"
+              title="Advance to next month with empty fields"
+            >
+              <span>Next Month ({MONTH_NAMES[(entryMonth % 12)].substring(0, 3)})</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleAdvanceNextFacility}
+              className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-200 font-bold py-1.5 px-2.5 rounded-lg text-xs transition-colors cursor-pointer"
+              title="Switch to next facility with empty fields"
+            >
+              <span>Next Facility</span>
+            </button>
+            {onNavigateTab && (
               <button
                 type="button"
                 onClick={() => {
                   setShowFloatingToast(false);
                   onNavigateTab('dashboard');
                 }}
-                className="flex-1 bg-emerald-800 hover:bg-emerald-900 text-white font-bold py-1.5 px-3 rounded-lg text-xs flex items-center justify-center space-x-1 transition-all shadow-xs cursor-pointer"
-              >
-                <Activity className="w-3.5 h-3.5 text-amber-300" />
-                <span>Executive Dashboard</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowFloatingToast(false);
-                  onNavigateTab('reports');
-                }}
                 className="bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300 font-bold py-1.5 px-2.5 rounded-lg text-xs transition-colors cursor-pointer"
               >
-                <span>Review Reports</span>
+                <span>Dashboard</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -1516,7 +1593,7 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
                 <div className="space-y-1">
                   <div className="flex items-center space-x-2">
                     <span className="bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 text-[10px] px-2 py-0.5 rounded font-extrabold uppercase tracking-wide">
-                      Verified & Saved
+                      Committed & Fields Cleared
                     </span>
                     {lastSavedSnapshot && (
                       <span className="text-[11px] text-emerald-800 dark:text-emerald-300 font-medium">
@@ -1525,44 +1602,72 @@ export const DataEntryModule: React.FC<DataEntryModuleProps> = ({
                     )}
                   </div>
                   <h4 className="font-bold text-sm text-emerald-950 dark:text-white">
-                    Facility Monthly Data Successfully Saved!
+                    Monthly Data Successfully Saved — Form Cleared & Ready!
                   </h4>
                   <p className="text-emerald-800 dark:text-emerald-200 leading-relaxed">
-                    {saveSuccessMsg}
+                    {saveSuccessMsg} All input boxes are now reset to 0 (empty) ready for entering another monthly return.
                   </p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setSaveSuccessMsg(null)}
+                className="text-emerald-700 hover:text-emerald-950 dark:text-emerald-400 dark:hover:text-emerald-200 p-1 cursor-pointer"
+                title="Dismiss message"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            {onNavigateTab && (
-              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-emerald-200 dark:border-emerald-800/80">
-                <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 mr-1">
-                  Next Steps:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('dashboard')}
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center space-x-1.5 shadow-xs"
-                >
-                  <Activity className="w-3.5 h-3.5 text-amber-300" />
-                  <span>View Executive Dashboard</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('comparison')}
-                  className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
-                >
-                  <span>Facility Rankings</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onNavigateTab('reports')}
-                  className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
-                >
-                  <span>Review Reports</span>
-                </button>
-              </div>
-            )}
+            {/* Quick Actions for Next Entry or Navigation */}
+            <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-emerald-200 dark:border-emerald-800/80">
+              <span className="text-[11px] font-bold text-emerald-900 dark:text-emerald-200 mr-1">
+                Quick Actions:
+              </span>
+              <button
+                type="button"
+                onClick={handleAdvanceNextMonth}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center space-x-1.5 shadow-xs"
+              >
+                <span>Enter Next Month ({MONTH_NAMES[(entryMonth % 12)].substring(0, 3)} {entryMonth === 12 ? entryYear + 1 : entryYear})</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleAdvanceNextFacility}
+                className="bg-emerald-900 hover:bg-emerald-950 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center space-x-1"
+              >
+                <span>Enter Next Facility</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleReloadSavedRecord}
+                className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+                title="Re-open the saved record if you want to make adjustments"
+              >
+                <span>Re-open Saved Record</span>
+              </button>
+              {onNavigateTab && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('dashboard')}
+                    className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer flex items-center space-x-1"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Dashboard</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('reports')}
+                    className="bg-white dark:bg-neutral-900 hover:bg-emerald-100 dark:hover:bg-neutral-800 text-emerald-800 dark:text-emerald-300 font-bold px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 text-xs transition-colors cursor-pointer"
+                  >
+                    <span>Reports</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
 
