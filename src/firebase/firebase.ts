@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import firebaseConfigJson from '../../firebase-applet-config.json';
 
@@ -18,5 +18,19 @@ const databaseId = firebaseConfigJson.firestoreDatabaseId && firebaseConfigJson.
   ? firebaseConfigJson.firestoreDatabaseId
   : undefined;
 
-export const db = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+function createFirestoreInstance() {
+  const firestoreSettings = {
+    experimentalForceLongPolling: true,
+  };
+  try {
+    return databaseId
+      ? initializeFirestore(app, firestoreSettings, databaseId)
+      : initializeFirestore(app, firestoreSettings);
+  } catch {
+    // If instance is already initialized (e.g., in HMR/reloads), retrieve existing instance
+    return databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+  }
+}
+
+export const db = createFirestoreInstance();
 export const auth = getAuth(app);
